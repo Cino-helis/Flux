@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.flux.core.GeckoRuntimeHolder
+import com.example.flux.core.HistoryManager
 import com.example.flux.core.PreferencesManager
 import com.example.flux.core.SearchEngine
 import com.example.flux.core.Tab
@@ -56,13 +57,36 @@ fun normalizeInput(input: String, engine: SearchEngine): String {
     return engine.searchUrl(trimmed)
 }
 
-fun createTab(runtime: GeckoRuntime): Tab {
+fun createTab(runtime: GeckoRuntime, context: Context): Tab {
     val tab = Tab(id = UUID.randomUUID().toString(), session = GeckoSession())
     tab.session.open(runtime)
+    tab.url = PreferencesManager.loadSearchEngine(context).homeUrl
+
     tab.session.contentBlockingDelegate = object : ContentBlocking.Delegate {
         override fun onContentBlocked(s: GeckoSession, e: ContentBlocking.BlockEvent) { tab.blockedCount++ }
         override fun onContentLoaded(s: GeckoSession, e: ContentBlocking.BlockEvent) {}
     }
+
+    tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
+        override fun onCanGoBack(s: GeckoSession, can: Boolean) { tab.canGoBack = can }
+        override fun onCanGoForward(s: GeckoSession, can: Boolean) { tab.canGoForward = can }
+    }
+
+    tab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
+        override fun onPageStart(s: GeckoSession, url: String) {
+            if (!url.startsWith("about:")) tab.url = url
+        }
+        override fun onPageStop(s: GeckoSession, success: Boolean) {
+            if (success &&
+                !tab.url.startsWith("about:") &&
+                SearchEngine.entries.none { it.homeUrl == tab.url }
+            ) {
+                HistoryManager.addVisit(context, tab.title, tab.url)
+            }
+        }
+    }
+
+
     return tab
 }
 
@@ -76,7 +100,7 @@ fun BrowserScreen() {
     var showHistory by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
-    val firstTab = remember { createTab(runtime) }
+    val firstTab = remember { createTab(runtime, context) }
     val tabs = remember { mutableStateListOf(firstTab) }
     var activeTabId by remember { mutableStateOf(firstTab.id) }
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.first()
@@ -89,7 +113,7 @@ fun BrowserScreen() {
     }
 
     val onNewTab: () -> Unit = {
-        val newTab = createTab(runtime)
+        val newTab = createTab(runtime, context)
         tabs.add(newTab)
         activeTabId = newTab.id
     }
@@ -101,6 +125,13 @@ fun BrowserScreen() {
         showFavorites = false
         showHistory = false
         showSettings = false
+    }
+
+    val goHome: () -> Unit = {
+        activeTab.url = searchEngine.homeUrl
+        activeTab.title = "Nouvel onglet"
+        urlInput = searchEngine.homeUrl
+        activeTab.session.loadUri(searchEngine.homeUrl)
     }
 
     LaunchedEffect(isDarkMode) {
@@ -121,7 +152,7 @@ fun BrowserScreen() {
                             tabs.find { it.id == tabId }?.session?.close()
                             tabs.removeAll { it.id == tabId }
                             if (tabs.isEmpty()) {
-                                val t = createTab(runtime); tabs.add(t); activeTabId = t.id
+                                val t = createTab(runtime, context); tabs.add(t); activeTabId = t.id
                             } else if (activeTabId == tabId) {
                                 activeTabId = tabs.last().id
                             }
@@ -171,6 +202,7 @@ fun BrowserScreen() {
                     NavigationRow(
                         tab = activeTab,
                         onNewTab = onNewTab,
+                        onHome = goHome,
                         onAddFavorite = {
                             PreferencesManager.addFavorite(context, activeTab.title, activeTab.url)
                             Toast.makeText(context, "⭐ Ajouté aux favoris !", Toast.LENGTH_SHORT).show()
@@ -184,13 +216,22 @@ fun BrowserScreen() {
                                 putExtra(Intent.EXTRA_TEXT, activeTab.url)
                             }
                             context.startActivity(Intent.createChooser(intent, "Partager via"))
-                        },
-                        onPlaceholder = { name ->
-                            Toast.makeText(context, "$name : bientôt disponible !", Toast.LENGTH_SHORT).show()
                         }
                     )
 
-                    GeckoViewComposable(modifier = Modifier.fillMaxSize(), activeSession = activeTab.session)
+                    val shouldShowHomePage =
+                        activeTab.url == searchEngine.homeUrl ||
+                        SearchEngine.entries.any { engine -> activeTab.url == engine.homeUrl }
+
+                    if (shouldShowHomePage) {
+                        HomePage(
+                            searchEngine = searchEngine,
+                            onSearch = { query -> openUrlInActiveTab(normalizeInput(query, searchEngine)) },
+                            onOpenUrl = { url -> openUrlInActiveTab(url) }
+                        )
+                    } else {
+                        GeckoViewComposable(modifier = Modifier.fillMaxSize(), activeSession = activeTab.session)
+                    }
                 }
             }
 
@@ -201,7 +242,13 @@ fun BrowserScreen() {
                 HistoryScreen(onBack = { showHistory = false }, onOpenUrl = openUrlInActiveTab)
             }
             if (showSettings) {
-                SettingsScreen(onBack = { showSettings = false })
+                SettingsScreen(
+                    onBack = {
+                        showSettings = false
+                        searchEngine = PreferencesManager.loadSearchEngine(context)
+                        isDarkMode = PreferencesManager.loadDarkMode(context)
+                    }
+                )
             }
         }
     }
@@ -246,12 +293,12 @@ fun TabChip(tab: Tab, isActive: Boolean, onClick: () -> Unit, onClose: () -> Uni
 fun NavigationRow(
     tab: Tab,
     onNewTab: () -> Unit,
+    onHome: () -> Unit,
     onAddFavorite: () -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
-    onShare: () -> Unit,
-    onPlaceholder: (String) -> Unit
+    onShare: () -> Unit
 ) {
     val session = tab.session
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -263,7 +310,7 @@ fun NavigationRow(
         }
         IconButton(onClick = { session.reload() }) { Icon(Icons.Default.Refresh, contentDescription = "Rafraîchir") }
         IconButton(onClick = { session.stop() }) { Icon(Icons.Default.Close, contentDescription = "Arrêter") }
-        IconButton(onClick = { session.loadUri(SearchEngine.BRAVE.homeUrl) }) { Icon(Icons.Default.Home, contentDescription = "Accueil") }
+        IconButton(onClick = onHome) { Icon(Icons.Default.Home, contentDescription = "Accueil") }
 
         Spacer(modifier = Modifier.weight(1f))
 

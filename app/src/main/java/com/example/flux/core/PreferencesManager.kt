@@ -15,7 +15,8 @@ object PreferencesManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun saveSearchEngine(context: Context, engine: SearchEngine) {
-        prefs(context).edit().putString(KEY_SEARCH_ENGINE, engine.name).apply()
+        // ✅ commit() = écriture immédiate et garantie (apply() est asynchrone)
+        prefs(context).edit().putString(KEY_SEARCH_ENGINE, engine.name).commit()
     }
 
     fun loadSearchEngine(context: Context): SearchEngine {
@@ -24,7 +25,7 @@ object PreferencesManager {
     }
 
     fun saveDarkMode(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_DARK_MODE, enabled).apply()
+        prefs(context).edit().putBoolean(KEY_DARK_MODE, enabled).commit()
     }
 
     fun loadDarkMode(context: Context): Boolean =
@@ -53,7 +54,7 @@ object PreferencesManager {
     }
 
     fun clearFavorites(context: Context) {
-        prefs(context).edit().remove(KEY_FAVORITES).apply()
+        prefs(context).edit().remove(KEY_FAVORITES).commit()
     }
 
     private fun saveFavorites(context: Context, list: List<Pair<String, String>>) {
@@ -61,6 +62,6 @@ object PreferencesManager {
         list.forEach { (t, u) ->
             arr.put(JSONObject().put("title", t).put("url", u))
         }
-        prefs(context).edit().putString(KEY_FAVORITES, arr.toString()).apply()
+        prefs(context).edit().putString(KEY_FAVORITES, arr.toString()).commit()
     }
 }
