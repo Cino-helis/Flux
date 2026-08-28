@@ -74,6 +74,7 @@ fun BrowserScreen() {
     var isDarkMode by remember { mutableStateOf(PreferencesManager.loadDarkMode(context)) }
     var showFavorites by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     val firstTab = remember { createTab(runtime) }
     val tabs = remember { mutableStateListOf(firstTab) }
@@ -99,6 +100,7 @@ fun BrowserScreen() {
         activeTab.session.loadUri(url)
         showFavorites = false
         showHistory = false
+        showSettings = false
     }
 
     LaunchedEffect(isDarkMode) {
@@ -175,6 +177,7 @@ fun BrowserScreen() {
                         },
                         onOpenFavorites = { showFavorites = true },
                         onOpenHistory = { showHistory = true },
+                        onOpenSettings = { showSettings = true },
                         onShare = {
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -196,6 +199,9 @@ fun BrowserScreen() {
             }
             if (showHistory) {
                 HistoryScreen(onBack = { showHistory = false }, onOpenUrl = openUrlInActiveTab)
+            }
+            if (showSettings) {
+                SettingsScreen(onBack = { showSettings = false })
             }
         }
     }
@@ -238,9 +244,14 @@ fun TabChip(tab: Tab, isActive: Boolean, onClick: () -> Unit, onClose: () -> Uni
 
 @Composable
 fun NavigationRow(
-    tab: Tab, onNewTab: () -> Unit, onAddFavorite: () -> Unit,
-    onOpenFavorites: () -> Unit, onOpenHistory: () -> Unit,
-    onShare: () -> Unit, onPlaceholder: (String) -> Unit
+    tab: Tab,
+    onNewTab: () -> Unit,
+    onAddFavorite: () -> Unit,
+    onOpenFavorites: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onShare: () -> Unit,
+    onPlaceholder: (String) -> Unit
 ) {
     val session = tab.session
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -271,7 +282,7 @@ fun NavigationRow(
                 DropdownMenuItem(text = { Text("Historique") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) }, onClick = { onOpenHistory(); mainMenuOpen = false })
                 DropdownMenuItem(text = { Text("Partager") }, leadingIcon = { Icon(Icons.Default.Share, null) }, onClick = { onShare(); mainMenuOpen = false })
                 HorizontalDivider()
-                DropdownMenuItem(text = { Text("Paramètres") }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { onPlaceholder("Paramètres"); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Paramètres") }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { onOpenSettings(); mainMenuOpen = false })
             }
         }
     }

@@ -48,9 +48,12 @@ object PreferencesManager {
         saveFavorites(context, list)
     }
 
-    // 🆕 Supprime un favori
     fun removeFavorite(context: Context, url: String) {
         saveFavorites(context, loadFavorites(context).filter { it.second != url })
+    }
+
+    fun clearFavorites(context: Context) {
+        prefs(context).edit().remove(KEY_FAVORITES).apply()
     }
 
     private fun saveFavorites(context: Context, list: List<Pair<String, String>>) {
