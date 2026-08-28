@@ -65,7 +65,7 @@ fun FavoritesScreen(
                             },
                             modifier = Modifier.clickable { onOpenUrl(fav.second) }
                         )
-                        Divider()
+                        HorizontalDivider()
                     }
                 }
             }

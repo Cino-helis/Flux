@@ -7,10 +7,11 @@ import org.mozilla.geckoview.GeckoSession
 
 data class Tab(
     val id: String,
-    val session: GeckoSession,
-    var title: String = "Nouvel onglet",
-    var url: String = SearchEngine.BRAVE.homeUrl
+    val session: GeckoSession
 ) {
-    // 🛡️ Réactif : l'UI se met à jour toute seule quand le compteur change
+    var title by mutableStateOf("Nouvel onglet")
+    var url by mutableStateOf(SearchEngine.BRAVE.homeUrl)
     var blockedCount by mutableStateOf(0)
+    var canGoBack by mutableStateOf(false)
+    var canGoForward by mutableStateOf(false)
 }

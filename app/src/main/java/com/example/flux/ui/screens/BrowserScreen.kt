@@ -1,5 +1,6 @@
 package com.example.flux.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.view.ViewGroup
 import android.widget.Toast
@@ -14,10 +15,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -30,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,7 +41,6 @@ import com.example.flux.core.GeckoRuntimeHolder
 import com.example.flux.core.PreferencesManager
 import com.example.flux.core.SearchEngine
 import com.example.flux.core.Tab
-import androidx.compose.ui.unit.dp
 import org.mozilla.geckoview.ContentBlocking
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
@@ -55,14 +56,11 @@ fun normalizeInput(input: String, engine: SearchEngine): String {
     return engine.searchUrl(trimmed)
 }
 
-// 🏭 Fabrique un onglet + branche son compteur anti-pub
 fun createTab(runtime: GeckoRuntime): Tab {
     val tab = Tab(id = UUID.randomUUID().toString(), session = GeckoSession())
     tab.session.open(runtime)
     tab.session.contentBlockingDelegate = object : ContentBlocking.Delegate {
-        override fun onContentBlocked(s: GeckoSession, e: ContentBlocking.BlockEvent) {
-            tab.blockedCount++
-        }
+        override fun onContentBlocked(s: GeckoSession, e: ContentBlocking.BlockEvent) { tab.blockedCount++ }
         override fun onContentLoaded(s: GeckoSession, e: ContentBlocking.BlockEvent) {}
     }
     return tab
@@ -75,6 +73,7 @@ fun BrowserScreen() {
     var searchEngine by remember { mutableStateOf(PreferencesManager.loadSearchEngine(context)) }
     var isDarkMode by remember { mutableStateOf(PreferencesManager.loadDarkMode(context)) }
     var showFavorites by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
 
     val firstTab = remember { createTab(runtime) }
     val tabs = remember { mutableStateListOf(firstTab) }
@@ -82,11 +81,24 @@ fun BrowserScreen() {
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.first()
 
     var urlInput by remember(activeTabId) { mutableStateOf(activeTab.url) }
+    var isUrlFieldFocused by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activeTab.url) {
+        if (!isUrlFieldFocused) urlInput = activeTab.url
+    }
 
     val onNewTab: () -> Unit = {
         val newTab = createTab(runtime)
         tabs.add(newTab)
         activeTabId = newTab.id
+    }
+
+    val openUrlInActiveTab: (String) -> Unit = { url ->
+        activeTab.url = url
+        urlInput = url
+        activeTab.session.loadUri(url)
+        showFavorites = false
+        showHistory = false
     }
 
     LaunchedEffect(isDarkMode) {
@@ -122,20 +134,20 @@ fun BrowserScreen() {
                         OutlinedTextField(
                             value = urlInput,
                             onValueChange = { urlInput = it },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { isUrlFieldFocused = it.isFocused },
                             label = { Text("URL ou recherche") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                             keyboardActions = KeyboardActions(onGo = {
-                                val url = normalizeInput(urlInput, searchEngine)
-                                activeTab.url = url
-                                activeTab.session.loadUri(url)
+                                openUrlInActiveTab(normalizeInput(urlInput, searchEngine))
                             })
                         )
                         Box {
                             var menuOpen by remember { mutableStateOf(false) }
                             IconButton(onClick = { menuOpen = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "Moteur de recherche")
+                                Icon(Icons.Default.MoreVert, contentDescription = "Moteur")
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                                 SearchEngine.entries.forEach { engine ->
@@ -151,11 +163,7 @@ fun BrowserScreen() {
                                 )
                             }
                         }
-                        Button(onClick = {
-                            val url = normalizeInput(urlInput, searchEngine)
-                            activeTab.url = url
-                            activeTab.session.loadUri(url)
-                        }) { Text("Go") }
+                        Button(onClick = { openUrlInActiveTab(normalizeInput(urlInput, searchEngine)) }) { Text("Go") }
                     }
 
                     NavigationRow(
@@ -166,6 +174,7 @@ fun BrowserScreen() {
                             Toast.makeText(context, "⭐ Ajouté aux favoris !", Toast.LENGTH_SHORT).show()
                         },
                         onOpenFavorites = { showFavorites = true },
+                        onOpenHistory = { showHistory = true },
                         onShare = {
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -178,216 +187,109 @@ fun BrowserScreen() {
                         }
                     )
 
-                    GeckoViewComposable(
-                        modifier = Modifier.fillMaxSize(),
-                        activeSession = activeTab.session
-                    )
+                    GeckoViewComposable(modifier = Modifier.fillMaxSize(), activeSession = activeTab.session)
                 }
             }
 
-            // ⭐ ÉCRAN FAVORIS (affiché par-dessus le navigateur)
             if (showFavorites) {
-                FavoritesScreen(
-                    onBack = { showFavorites = false },
-                    onOpenUrl = { url ->
-                        activeTab.url = url
-                        urlInput = url
-                        activeTab.session.loadUri(url)
-                        showFavorites = false
-                    }
-                )
+                FavoritesScreen(onBack = { showFavorites = false }, onOpenUrl = openUrlInActiveTab)
+            }
+            if (showHistory) {
+                HistoryScreen(onBack = { showHistory = false }, onOpenUrl = openUrlInActiveTab)
             }
         }
     }
 }
 
 @Composable
-fun TabBar(
-    tabs: List<Tab>,
-    activeTabId: String,
-    onTabSelected: (String) -> Unit,
-    onTabClosed: (String) -> Unit
-) {
+fun TabBar(tabs: List<Tab>, activeTabId: String, onTabSelected: (String) -> Unit, onTabClosed: (String) -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+            .horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tabs.forEach { tab ->
-            TabChip(
-                tab = tab,
-                isActive = tab.id == activeTabId,
-                onClick = { onTabSelected(tab.id) },
-                onClose = { onTabClosed(tab.id) }
-            )
+            TabChip(tab = tab, isActive = tab.id == activeTabId, onClick = { onTabSelected(tab.id) }, onClose = { onTabClosed(tab.id) })
         }
     }
 }
 
 @Composable
-fun TabChip(
-    tab: Tab,
-    isActive: Boolean,
-    onClick: () -> Unit,
-    onClose: () -> Unit
-) {
+fun TabChip(tab: Tab, isActive: Boolean, onClick: () -> Unit, onClose: () -> Unit) {
     Row(
-        modifier = Modifier
-            .padding(end = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (isActive) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surface
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+        modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(8.dp))
+            .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = tab.title,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            text = tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 120.dp),
-            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface
+            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.width(4.dp))
         Icon(
-            Icons.Default.Close,
-            contentDescription = "Fermer l'onglet",
+            Icons.Default.Close, contentDescription = "Fermer",
             modifier = Modifier.size(16.dp).clickable(onClick = onClose),
-            tint = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
-                   else MaterialTheme.colorScheme.onSurface
+            tint = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
         )
     }
 }
 
 @Composable
 fun NavigationRow(
-    tab: Tab,
-    onNewTab: () -> Unit,
-    onAddFavorite: () -> Unit,
-    onOpenFavorites: () -> Unit,
-    onShare: () -> Unit,
-    onPlaceholder: (String) -> Unit
+    tab: Tab, onNewTab: () -> Unit, onAddFavorite: () -> Unit,
+    onOpenFavorites: () -> Unit, onOpenHistory: () -> Unit,
+    onShare: () -> Unit, onPlaceholder: (String) -> Unit
 ) {
     val session = tab.session
-    var canGoBack by remember { mutableStateOf(false) }
-    var canGoForward by remember { mutableStateOf(false) }
-
-    DisposableEffect(session) {
-        session.navigationDelegate = object : GeckoSession.NavigationDelegate {
-            override fun onCanGoBack(s: GeckoSession, canGoBackNew: Boolean) { canGoBack = canGoBackNew }
-            override fun onCanGoForward(s: GeckoSession, canGoForwardNew: Boolean) { canGoForward = canGoForwardNew }
-        }
-        onDispose { session.navigationDelegate = null }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = { session.goBack() }, enabled = canGoBack) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { session.goBack() }, enabled = tab.canGoBack) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
         }
-        IconButton(onClick = { session.goForward() }, enabled = canGoForward) {
+        IconButton(onClick = { session.goForward() }, enabled = tab.canGoForward) {
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Avancer")
         }
-        IconButton(onClick = { session.reload() }) {
-            Icon(Icons.Default.Refresh, contentDescription = "Rafraîchir")
-        }
-        IconButton(onClick = { session.stop() }) {
-            Icon(Icons.Default.Close, contentDescription = "Arrêter")
-        }
-        IconButton(onClick = { session.loadUri(SearchEngine.BRAVE.homeUrl) }) {
-            Icon(Icons.Default.Home, contentDescription = "Accueil")
-        }
+        IconButton(onClick = { session.reload() }) { Icon(Icons.Default.Refresh, contentDescription = "Rafraîchir") }
+        IconButton(onClick = { session.stop() }) { Icon(Icons.Default.Close, contentDescription = "Arrêter") }
+        IconButton(onClick = { session.loadUri(SearchEngine.BRAVE.homeUrl) }) { Icon(Icons.Default.Home, contentDescription = "Accueil") }
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // 🛡️ Bouclier + compteur de l'onglet actif
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Lock, contentDescription = "Traqueurs bloqués", tint = MaterialTheme.colorScheme.primary)
-            Text(
-                text = "${tab.blockedCount}",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(start = 4.dp)
-            )
+            Icon(Icons.Default.Lock, contentDescription = "Bloqués", tint = MaterialTheme.colorScheme.primary)
+            Text(text = "${tab.blockedCount}", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 4.dp))
         }
 
-        // ☰ Menu hamburger
         Box {
             var mainMenuOpen by remember { mutableStateOf(false) }
-            IconButton(onClick = { mainMenuOpen = true }) {
-                Icon(Icons.Default.Menu, contentDescription = "Menu principal")
-            }
+            IconButton(onClick = { mainMenuOpen = true }) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
             DropdownMenu(expanded = mainMenuOpen, onDismissRequest = { mainMenuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text("Nouvel onglet") },
-                    leadingIcon = { Icon(Icons.Default.Add, null) },
-                    onClick = { onNewTab(); mainMenuOpen = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Ajouter aux favoris") },
-                    leadingIcon = { Icon(Icons.Default.Star, null) },
-                    onClick = { onAddFavorite(); mainMenuOpen = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Favoris") },
-                    leadingIcon = { Icon(Icons.Default.List, null) },
-                    onClick = { onOpenFavorites(); mainMenuOpen = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Historique") },
-                    leadingIcon = { Icon(Icons.Default.List, null) },
-                    onClick = { onPlaceholder("Historique"); mainMenuOpen = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Partager") },
-                    leadingIcon = { Icon(Icons.Default.Share, null) },
-                    onClick = { onShare(); mainMenuOpen = false }
-                )
+                DropdownMenuItem(text = { Text("Nouvel onglet") }, leadingIcon = { Icon(Icons.Default.Add, null) }, onClick = { onNewTab(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Ajouter aux favoris") }, leadingIcon = { Icon(Icons.Default.Star, null) }, onClick = { onAddFavorite(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Favoris") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) }, onClick = { onOpenFavorites(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Historique") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) }, onClick = { onOpenHistory(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Partager") }, leadingIcon = { Icon(Icons.Default.Share, null) }, onClick = { onShare(); mainMenuOpen = false })
                 HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text("Paramètres") },
-                    leadingIcon = { Icon(Icons.Default.Settings, null) },
-                    onClick = { onPlaceholder("Paramètres"); mainMenuOpen = false }
-                )
+                DropdownMenuItem(text = { Text("Paramètres") }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { onPlaceholder("Paramètres"); mainMenuOpen = false })
             }
         }
     }
 }
 
 @Composable
-fun GeckoViewComposable(
-    modifier: Modifier = Modifier,
-    activeSession: GeckoSession
-) {
+fun GeckoViewComposable(modifier: Modifier = Modifier, activeSession: GeckoSession) {
     val geckoViewRef = remember { mutableStateOf<GeckoView?>(null) }
-
-    LaunchedEffect(activeSession) {
-        geckoViewRef.value?.setSession(activeSession)
-    }
-
+    LaunchedEffect(activeSession) { geckoViewRef.value?.setSession(activeSession) }
     AndroidView(
         modifier = modifier,
         factory = { context ->
             GeckoView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 geckoViewRef.value = this
                 setSession(activeSession)
             }
         },
-        update = { view ->
-            if (view.session != activeSession) {
-                view.setSession(activeSession)
-            }
-        }
+        update = { view -> if (view.session != activeSession) view.setSession(activeSession) }
     )
 }
