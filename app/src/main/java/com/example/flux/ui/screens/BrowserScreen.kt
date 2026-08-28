@@ -47,6 +47,8 @@ import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.GeckoResult
+import org.mozilla.geckoview.GeckoSessionSettings
 import java.util.UUID
 
 fun normalizeInput(input: String, engine: SearchEngine): String {
@@ -58,8 +60,14 @@ fun normalizeInput(input: String, engine: SearchEngine): String {
 }
 
 fun createTab(runtime: GeckoRuntime, context: Context): Tab {
-    val tab = Tab(id = UUID.randomUUID().toString(), session = GeckoSession())
+    // 🎬 Configure la session pour bien gérer les vidéos
+    val sessionSettings = GeckoSessionSettings.Builder()
+        .suspendMediaWhenInactive(false)
+        .build()
+    
+    val tab = Tab(id = UUID.randomUUID().toString(), session = GeckoSession(sessionSettings))
     tab.session.open(runtime)
+    tab.url = PreferencesManager.loadSearchEngine(context).homeUrl
     tab.url = PreferencesManager.loadSearchEngine(context).homeUrl
 
     tab.session.contentBlockingDelegate = object : ContentBlocking.Delegate {
@@ -83,6 +91,44 @@ fun createTab(runtime: GeckoRuntime, context: Context): Tab {
             ) {
                 HistoryManager.addVisit(context, tab.title, tab.url)
             }
+        }
+    }
+
+    // 🏷️ VRAI titre de la page (il vit dans ContentDelegate !)
+    tab.session.contentDelegate = object : GeckoSession.ContentDelegate {
+        override fun onTitleChange(s: GeckoSession, title: String?) {
+            if (!title.isNullOrBlank()) tab.title = title
+        }
+    }
+
+    // 🎬 Autorise la lecture auto + vidéos DRM, refuse le reste (géo, notifications…)
+    tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
+        override fun onContentPermissionRequest(
+            s: GeckoSession,
+            perm: GeckoSession.PermissionDelegate.ContentPermission
+        ): GeckoResult<Int> {
+            val response = when (perm.permission) {
+                GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE,
+                GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE,
+                GeckoSession.PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS ->
+                    GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW
+                else -> GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY
+            }
+            return GeckoResult.fromValue(response)
+        }
+
+        override fun onMediaPermissionRequest(
+            s: GeckoSession,
+            uri: String,
+            video: Array<GeckoSession.PermissionDelegate.MediaSource>?,
+            audio: Array<GeckoSession.PermissionDelegate.MediaSource>?,
+            callback: GeckoSession.PermissionDelegate.MediaCallback
+        ) {
+            // grant prend deux paramètres individuels, pas des arrays
+            callback.grant(
+                video?.firstOrNull()?.id,
+                audio?.firstOrNull()?.id
+            )
         }
     }
 

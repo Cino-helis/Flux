@@ -36,7 +36,6 @@ class MainActivity : ComponentActivity() {
                 .cookieBehavior(ContentBlocking.CookieBehavior.ACCEPT_NON_TRACKERS)
                 .build()
 
-            // 🌙 Le moteur lit ton réglage sauvegardé pour les sites web
             val darkMode = PreferencesManager.loadDarkMode(this)
             val runtimeSettings = GeckoRuntimeSettings.Builder()
                 .contentBlocking(contentBlockingSettings)
