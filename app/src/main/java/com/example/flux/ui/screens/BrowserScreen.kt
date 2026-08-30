@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -37,18 +40,22 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.flux.core.BrowserViewModel
 import com.example.flux.core.GeckoRuntimeHolder
-import com.example.flux.core.HistoryManager
 import com.example.flux.core.PreferencesManager
 import com.example.flux.core.SearchEngine
 import com.example.flux.core.Tab
 import org.mozilla.geckoview.ContentBlocking
+import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
-import org.mozilla.geckoview.GeckoView
-import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoSessionSettings
+import org.mozilla.geckoview.GeckoView
 import java.util.UUID
 
 fun normalizeInput(input: String, engine: SearchEngine): String {
@@ -60,14 +67,12 @@ fun normalizeInput(input: String, engine: SearchEngine): String {
 }
 
 fun createTab(runtime: GeckoRuntime, context: Context): Tab {
-    // 🎬 Configure la session pour bien gérer les vidéos
     val sessionSettings = GeckoSessionSettings.Builder()
         .suspendMediaWhenInactive(false)
         .build()
-    
+
     val tab = Tab(id = UUID.randomUUID().toString(), session = GeckoSession(sessionSettings))
     tab.session.open(runtime)
-    tab.url = PreferencesManager.loadSearchEngine(context).homeUrl
     tab.url = PreferencesManager.loadSearchEngine(context).homeUrl
 
     tab.session.contentBlockingDelegate = object : ContentBlocking.Delegate {
@@ -84,24 +89,17 @@ fun createTab(runtime: GeckoRuntime, context: Context): Tab {
         override fun onPageStart(s: GeckoSession, url: String) {
             if (!url.startsWith("about:")) tab.url = url
         }
-        override fun onPageStop(s: GeckoSession, success: Boolean) {
-            if (success &&
-                !tab.url.startsWith("about:") &&
-                SearchEngine.entries.none { it.homeUrl == tab.url }
-            ) {
-                HistoryManager.addVisit(context, tab.title, tab.url)
-            }
-        }
     }
 
-    // 🏷️ VRAI titre de la page (il vit dans ContentDelegate !)
     tab.session.contentDelegate = object : GeckoSession.ContentDelegate {
         override fun onTitleChange(s: GeckoSession, title: String?) {
             if (!title.isNullOrBlank()) tab.title = title
         }
+        override fun onFullScreen(s: GeckoSession, fullScreen: Boolean) {
+            tab.isFullScreen = fullScreen
+        }
     }
 
-    // 🎬 Autorise la lecture auto + vidéos DRM, refuse le reste (géo, notifications…)
     tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
         override fun onContentPermissionRequest(
             s: GeckoSession,
@@ -124,20 +122,19 @@ fun createTab(runtime: GeckoRuntime, context: Context): Tab {
             audio: Array<GeckoSession.PermissionDelegate.MediaSource>?,
             callback: GeckoSession.PermissionDelegate.MediaCallback
         ) {
-            // grant prend deux paramètres individuels, pas des arrays
-            callback.grant(
-                video?.firstOrNull()?.id,
-                audio?.firstOrNull()?.id
-            )
+            callback.grant(video?.firstOrNull()?.id, audio?.firstOrNull()?.id)
         }
     }
-
 
     return tab
 }
 
 @Composable
 fun BrowserScreen() {
+    // 🆕 Récupère le ViewModel (singleton, survit aux changements de config)
+    val activity = LocalContext.current as? ComponentActivity
+    val viewModel: BrowserViewModel = viewModel(viewModelStoreOwner = activity!!)
+
     val context = LocalContext.current
     val runtime = GeckoRuntimeHolder.runtime!!
     var searchEngine by remember { mutableStateOf(PreferencesManager.loadSearchEngine(context)) }
@@ -153,6 +150,34 @@ fun BrowserScreen() {
 
     var urlInput by remember(activeTabId) { mutableStateOf(activeTab.url) }
     var isUrlFieldFocused by remember { mutableStateOf(false) }
+
+    // ⬅️ Bouton retour intelligent
+    BackHandler(
+        enabled = activeTab.isFullScreen || showSettings || showFavorites || showHistory || activeTab.canGoBack
+    ) {
+        when {
+            activeTab.isFullScreen -> activeTab.session.exitFullScreen()
+            showSettings -> showSettings = false
+            showFavorites -> showFavorites = false
+            showHistory -> showHistory = false
+            else -> activeTab.session.goBack()
+        }
+    }
+
+    // 🎬 Plein écran : masque les barres système
+    val window = activity?.window
+    LaunchedEffect(activeTab.isFullScreen) {
+        window?.let { w ->
+            val controller = WindowCompat.getInsetsController(w, w.decorView)
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (activeTab.isFullScreen) {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
 
     LaunchedEffect(activeTab.url) {
         if (!isUrlFieldFocused) urlInput = activeTab.url
@@ -180,6 +205,29 @@ fun BrowserScreen() {
         activeTab.session.loadUri(searchEngine.homeUrl)
     }
 
+    // 🆕 Enregistre dans l'historique quand une page se charge
+    DisposableEffect(activeTab.session) {
+        val delegate = object : GeckoSession.ProgressDelegate {
+            override fun onPageStop(s: GeckoSession, success: Boolean) {
+                if (success &&
+                    !activeTab.url.startsWith("about:") &&
+                    SearchEngine.entries.none { it.homeUrl == activeTab.url }
+                ) {
+                    viewModel.addVisit(activeTab.title, activeTab.url)
+                }
+            }
+        }
+        activeTab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
+            override fun onPageStart(s: GeckoSession, url: String) {
+                if (!url.startsWith("about:")) activeTab.url = url
+            }
+            override fun onPageStop(s: GeckoSession, success: Boolean) {
+                delegate.onPageStop(s, success)
+            }
+        }
+        onDispose {}
+    }
+
     LaunchedEffect(isDarkMode) {
         runtime.settings.preferredColorScheme =
             if (isDarkMode) GeckoRuntimeSettings.COLOR_SCHEME_DARK
@@ -189,89 +237,97 @@ fun BrowserScreen() {
     MaterialTheme(colorScheme = if (isDarkMode) darkColorScheme() else lightColorScheme()) {
         Box(modifier = Modifier.fillMaxSize()) {
             Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                    TabBar(
-                        tabs = tabs,
-                        activeTabId = activeTabId,
-                        onTabSelected = { activeTabId = it },
-                        onTabClosed = { tabId ->
-                            tabs.find { it.id == tabId }?.session?.close()
-                            tabs.removeAll { it.id == tabId }
-                            if (tabs.isEmpty()) {
-                                val t = createTab(runtime, context); tabs.add(t); activeTabId = t.id
-                            } else if (activeTabId == tabId) {
-                                activeTabId = tabs.last().id
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (!activeTab.isFullScreen) Modifier.statusBarsPadding() else Modifier)
+                ) {
+                    if (!activeTab.isFullScreen) {
+                        TabBar(
+                            tabs = tabs,
+                            activeTabId = activeTabId,
+                            onTabSelected = { activeTabId = it },
+                            onTabClosed = { tabId ->
+                                tabs.find { it.id == tabId }?.session?.close()
+                                tabs.removeAll { it.id == tabId }
+                                if (tabs.isEmpty()) {
+                                    val t = createTab(runtime, context); tabs.add(t); activeTabId = t.id
+                                } else if (activeTabId == tabId) {
+                                    activeTabId = tabs.last().id
+                                }
                             }
-                        }
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = urlInput,
-                            onValueChange = { urlInput = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .onFocusChanged { isUrlFieldFocused = it.isFocused },
-                            label = { Text("URL ou recherche") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                            keyboardActions = KeyboardActions(onGo = {
-                                openUrlInActiveTab(normalizeInput(urlInput, searchEngine))
-                            })
                         )
-                        Box {
-                            var menuOpen by remember { mutableStateOf(false) }
-                            IconButton(onClick = { menuOpen = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "Moteur")
-                            }
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                SearchEngine.entries.forEach { engine ->
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = urlInput,
+                                onValueChange = { urlInput = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .onFocusChanged { isUrlFieldFocused = it.isFocused },
+                                label = { Text("URL ou recherche") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                keyboardActions = KeyboardActions(onGo = {
+                                    openUrlInActiveTab(normalizeInput(urlInput, searchEngine))
+                                })
+                            )
+                            Box {
+                                var menuOpen by remember { mutableStateOf(false) }
+                                IconButton(onClick = { menuOpen = true }) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = "Moteur")
+                                }
+                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                    SearchEngine.entries.forEach { engine ->
+                                        DropdownMenuItem(
+                                            text = { Text(if (engine == searchEngine) "✓ ${engine.displayName}" else engine.displayName) },
+                                            onClick = { searchEngine = engine; PreferencesManager.saveSearchEngine(context, engine); menuOpen = false }
+                                        )
+                                    }
+                                    HorizontalDivider()
                                     DropdownMenuItem(
-                                        text = { Text(if (engine == searchEngine) "✓ ${engine.displayName}" else engine.displayName) },
-                                        onClick = { searchEngine = engine; PreferencesManager.saveSearchEngine(context, engine); menuOpen = false }
+                                        text = { Text(if (isDarkMode) "✓ Mode sombre" else "Mode sombre") },
+                                        onClick = { isDarkMode = !isDarkMode; PreferencesManager.saveDarkMode(context, isDarkMode) }
                                     )
                                 }
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text(if (isDarkMode) "✓ Mode sombre" else "Mode sombre") },
-                                    onClick = { isDarkMode = !isDarkMode; PreferencesManager.saveDarkMode(context, isDarkMode) }
-                                )
                             }
+                            Button(onClick = { openUrlInActiveTab(normalizeInput(urlInput, searchEngine)) }) { Text("Go") }
                         }
-                        Button(onClick = { openUrlInActiveTab(normalizeInput(urlInput, searchEngine)) }) { Text("Go") }
-                    }
 
-                    NavigationRow(
-                        tab = activeTab,
-                        onNewTab = onNewTab,
-                        onHome = goHome,
-                        onAddFavorite = {
-                            PreferencesManager.addFavorite(context, activeTab.title, activeTab.url)
-                            Toast.makeText(context, "⭐ Ajouté aux favoris !", Toast.LENGTH_SHORT).show()
-                        },
-                        onOpenFavorites = { showFavorites = true },
-                        onOpenHistory = { showHistory = true },
-                        onOpenSettings = { showSettings = true },
-                        onShare = {
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, activeTab.url)
+                        NavigationRow(
+                            tab = activeTab,
+                            onNewTab = onNewTab,
+                            onHome = goHome,
+                            onAddFavorite = {
+                                // 🆕 Passe par le ViewModel
+                                viewModel.addFavorite(activeTab.title, activeTab.url)
+                                Toast.makeText(context, "⭐ Ajouté aux favoris !", Toast.LENGTH_SHORT).show()
+                            },
+                            onOpenFavorites = { showFavorites = true },
+                            onOpenHistory = { showHistory = true },
+                            onOpenSettings = { showSettings = true },
+                            onShare = {
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, activeTab.url)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Partager via"))
                             }
-                            context.startActivity(Intent.createChooser(intent, "Partager via"))
-                        }
-                    )
+                        )
+                    }
 
                     val shouldShowHomePage =
                         activeTab.url == searchEngine.homeUrl ||
                         SearchEngine.entries.any { engine -> activeTab.url == engine.homeUrl }
 
-                    if (shouldShowHomePage) {
+                    if (shouldShowHomePage && !activeTab.isFullScreen) {
                         HomePage(
                             searchEngine = searchEngine,
+                            viewModel = viewModel,
                             onSearch = { query -> openUrlInActiveTab(normalizeInput(query, searchEngine)) },
                             onOpenUrl = { url -> openUrlInActiveTab(url) }
                         )
@@ -282,13 +338,22 @@ fun BrowserScreen() {
             }
 
             if (showFavorites) {
-                FavoritesScreen(onBack = { showFavorites = false }, onOpenUrl = openUrlInActiveTab)
+                FavoritesScreen(
+                    viewModel = viewModel,
+                    onBack = { showFavorites = false },
+                    onOpenUrl = openUrlInActiveTab
+                )
             }
             if (showHistory) {
-                HistoryScreen(onBack = { showHistory = false }, onOpenUrl = openUrlInActiveTab)
+                HistoryScreen(
+                    viewModel = viewModel,
+                    onBack = { showHistory = false },
+                    onOpenUrl = openUrlInActiveTab
+                )
             }
             if (showSettings) {
                 SettingsScreen(
+                    viewModel = viewModel,
                     onBack = {
                         showSettings = false
                         searchEngine = PreferencesManager.loadSearchEngine(context)

@@ -14,4 +14,5 @@ data class Tab(
     var blockedCount by mutableStateOf(0)
     var canGoBack by mutableStateOf(false)
     var canGoForward by mutableStateOf(false)
+    var isFullScreen by mutableStateOf(false)
 }

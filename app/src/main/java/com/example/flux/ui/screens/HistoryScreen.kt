@@ -15,15 +15,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.flux.core.HistoryManager
+import com.example.flux.core.BrowserViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
-fun HistoryScreen(onBack: () -> Unit, onOpenUrl: (String) -> Unit) {
-    val context = LocalContext.current
-    var history by remember { mutableStateOf(HistoryManager.load(context)) }
+fun HistoryScreen(
+    viewModel: BrowserViewModel,
+    onBack: () -> Unit,
+    onOpenUrl: (String) -> Unit
+) {
+    // 🆕 Observe l'historique en temps réel
+    val history by viewModel.history.collectAsState()
     val dateFormat = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
 
     BackHandler { onBack() }
@@ -32,9 +36,16 @@ fun HistoryScreen(onBack: () -> Unit, onOpenUrl: (String) -> Unit) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour") }
-                Text("Historique", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(
+                    "Historique",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
                 if (history.isNotEmpty()) {
-                    TextButton(onClick = { HistoryManager.clear(context); history = emptyList() }) { Text("Effacer") }
+                    TextButton(onClick = {
+                        // 🆕 Efface via le ViewModel
+                        viewModel.clearHistory()
+                    }) { Text("Effacer") }
                 }
             }
 
@@ -44,14 +55,21 @@ fun HistoryScreen(onBack: () -> Unit, onOpenUrl: (String) -> Unit) {
                 }
             } else {
                 LazyColumn {
-                    items(history, key = { it.url + it.timestamp }) { visit ->
+                    items(history, key = { it.id }) { visit ->
                         ListItem(
-                            headlineContent = { Text(visit.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            headlineContent = {
+                                Text(visit.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            },
                             supportingContent = {
                                 Text(visit.url, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(dateFormat.format(Date(visit.timestamp)), style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    dateFormat.format(Date(visit.timestamp)),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             },
-                            leadingContent = { Icon(Icons.AutoMirrored.Filled.List, null, tint = MaterialTheme.colorScheme.primary) },
+                            leadingContent = {
+                                Icon(Icons.AutoMirrored.Filled.List, null, tint = MaterialTheme.colorScheme.primary)
+                            },
                             modifier = Modifier.clickable { onOpenUrl(visit.url) }
                         )
                         HorizontalDivider()

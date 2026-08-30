@@ -22,23 +22,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.flux.core.PreferencesManager
+import com.example.flux.core.BrowserViewModel
 import com.example.flux.core.SearchEngine
 
 @Composable
 fun HomePage(
     searchEngine: SearchEngine,
+    viewModel: BrowserViewModel,
     onSearch: (String) -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
-    val context = LocalContext.current
     var searchText by remember { mutableStateOf("") }
-    val favorites = remember { mutableStateOf(PreferencesManager.loadFavorites(context)) }
-
-    // Rafraîchit les favoris quand on revient sur la page
-    LaunchedEffect(Unit) {
-        favorites.value = PreferencesManager.loadFavorites(context)
-    }
+    
+    // 🆕 Observe les favoris depuis Room via le ViewModel
+    val favorites by viewModel.favorites.collectAsState()
 
     Box(
         modifier = Modifier
@@ -58,7 +55,6 @@ fun HomePage(
         ) {
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Logo/Titre
             Text(
                 text = "Flux",
                 style = MaterialTheme.typography.displayLarge,
@@ -67,7 +63,6 @@ fun HomePage(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Barre de recherche centrale
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { searchText = it },
@@ -91,8 +86,7 @@ fun HomePage(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Section Favoris
-            if (favorites.value.isNotEmpty()) {
+            if (favorites.isNotEmpty()) {
                 Text(
                     text = "Favoris",
                     style = MaterialTheme.typography.titleMedium,
@@ -108,16 +102,15 @@ fun HomePage(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(favorites.value) { (title, url) ->
+                    items(favorites) { fav ->
                         FavoriteCard(
-                            title = title,
-                            url = url,
-                            onClick = { onOpenUrl(url) }
+                            title = fav.title,
+                            url = fav.url,
+                            onClick = { onOpenUrl(fav.url) }
                         )
                     }
                 }
             } else {
-                // Message quand il n'y a pas de favoris
                 Spacer(modifier = Modifier.weight(1f))
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,

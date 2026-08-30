@@ -16,27 +16,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.flux.core.PreferencesManager
+import com.example.flux.core.BrowserViewModel
 
 @Composable
 fun FavoritesScreen(
+    viewModel: BrowserViewModel,
     onBack: () -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    var favorites by remember { mutableStateOf(PreferencesManager.loadFavorites(context)) }
+    // 🆕 Observe les favoris en temps réel
+    val favorites by viewModel.favorites.collectAsState()
 
     BackHandler { onBack() }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                }
+            Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour") }
                 Text("Favoris", style = MaterialTheme.typography.titleLarge)
             }
 
@@ -46,24 +42,24 @@ fun FavoritesScreen(
                 }
             } else {
                 LazyColumn {
-                    items(favorites, key = { it.second }) { fav ->
+                    items(favorites, key = { it.url }) { fav ->
                         ListItem(
-                            headlineContent = { Text(fav.first) },
+                            headlineContent = { Text(fav.title) },
                             supportingContent = {
-                                Text(fav.second, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(fav.url, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             },
                             leadingContent = {
                                 Icon(Icons.Default.Star, null, tint = MaterialTheme.colorScheme.primary)
                             },
                             trailingContent = {
                                 IconButton(onClick = {
-                                    PreferencesManager.removeFavorite(context, fav.second)
-                                    favorites = PreferencesManager.loadFavorites(context)
+                                    // 🆕 Supprime via le ViewModel
+                                    viewModel.removeFavorite(fav.url)
                                 }) {
                                     Icon(Icons.Default.Delete, contentDescription = "Supprimer")
                                 }
                             },
-                            modifier = Modifier.clickable { onOpenUrl(fav.second) }
+                            modifier = Modifier.clickable { onOpenUrl(fav.url) }
                         )
                         HorizontalDivider()
                     }

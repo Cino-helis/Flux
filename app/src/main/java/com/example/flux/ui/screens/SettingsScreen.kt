@@ -15,12 +15,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.flux.core.HistoryManager
+import com.example.flux.core.BrowserViewModel
 import com.example.flux.core.PreferencesManager
 import com.example.flux.core.SearchEngine
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    viewModel: BrowserViewModel,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     var searchEngine by remember { mutableStateOf(PreferencesManager.loadSearchEngine(context)) }
     var isDarkMode by remember { mutableStateOf(PreferencesManager.loadDarkMode(context)) }
@@ -138,10 +141,11 @@ fun SettingsScreen(onBack: () -> Unit) {
             text = { Text("Cette action supprimera vos favoris, votre historique et réinitialisera les paramètres.") },
             confirmButton = {
                 TextButton(onClick = {
+                    // 🆕 Efface via le ViewModel
                     PreferencesManager.saveSearchEngine(context, SearchEngine.BRAVE)
                     PreferencesManager.saveDarkMode(context, false)
-                    HistoryManager.clear(context)
-                    PreferencesManager.clearFavorites(context)
+                    viewModel.clearHistory()
+                    viewModel.clearFavorites()
                     searchEngine = SearchEngine.BRAVE
                     isDarkMode = false
                     showClearDialog = false
