@@ -1,0 +1,2612 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/
+  src/
+    androidTest/
+      java/
+        com/
+          example/
+            flux/
+              ExampleInstrumentedTest.kt
+    main/
+      java/
+        com/
+          example/
+            flux/
+              core/
+                db/
+                  AppDatabase.kt
+                BrowserViewModel.kt
+                GeckoRuntimeHolder.kt
+                PreferencesManager.kt
+                SearchEngine.kt
+                Tab.kt
+              services/
+                AdBlockerService.kt
+              ui/
+                components/
+                  AddressBar.kt
+                  NavigationButtons.kt
+                screens/
+                  BrowserScreen.kt
+                  FavoritesScreen.kt
+                  HistoryScreen.kt
+                  HomePage.kt
+                  SettingsScreen.kt
+                theme/
+                  Color.kt
+                  Theme.kt
+                  Type.kt
+              MainActivity.kt
+      res/
+        drawable/
+          ic_launcher_background.xml
+          ic_launcher_flux.png
+          ic_launcher_flux2.png
+          ic_launcher_foreground.xml
+        mipmap-anydpi-v26/
+          ic_launcher_flux.xml
+          ic_launcher_round.xml
+          ic_launcher.xml
+        mipmap-hdpi/
+          ic_launcher_round.webp
+          ic_launcher.webp
+        mipmap-mdpi/
+          ic_launcher_round.webp
+          ic_launcher.webp
+        mipmap-xhdpi/
+          ic_launcher_round.webp
+          ic_launcher.webp
+        mipmap-xxhdpi/
+          ic_launcher_round.webp
+          ic_launcher.webp
+        mipmap-xxxhdpi/
+          ic_launcher_round.webp
+          ic_launcher.webp
+        values/
+          colors.xml
+          strings.xml
+          themes.xml
+        xml/
+          backup_rules.xml
+          data_extraction_rules.xml
+      AndroidManifest.xml
+    test/
+      java/
+        com/
+          example/
+            flux/
+              ExampleUnitTest.kt
+  .gitignore
+  build.gradle.kts
+  proguard-rules.pro
+gradle/
+  wrapper/
+    gradle-wrapper.jar
+    gradle-wrapper.properties
+  libs.versions.toml
+.gitignore
+build.gradle.kts
+gradle.properties
+gradlew
+gradlew.bat
+README.md
+settings.gradle.kts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/src/androidTest/java/com/example/flux/ExampleInstrumentedTest.kt">
+package com.example.flux
+
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
+import org.junit.Test
+import org.junit.runner.RunWith
+
+import org.junit.Assert.*
+
+/**
+ * Instrumented test, which will execute on an Android device.
+ *
+ * See [testing documentation](http://d.android.com/tools/testing).
+ */
+@RunWith(AndroidJUnit4::class)
+class ExampleInstrumentedTest {
+    @Test
+    fun useAppContext() {
+        // Context of the app under test.
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        assertEquals("com.example.flux", appContext.packageName)
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/core/db/AppDatabase.kt">
+package com.example.flux.core.db
+
+import android.content.Context
+import androidx.room.*
+import kotlinx.coroutines.flow.Flow
+
+// ⭐ Entité Favori
+@Entity(tableName = "favorites")
+data class FavoriteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val url: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+// 📜 Entité Historique
+@Entity(tableName = "history")
+data class HistoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val url: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Dao
+interface FavoriteDao {
+    @Query("SELECT * FROM favorites ORDER BY createdAt DESC")
+    fun getAllFlow(): Flow<List<FavoriteEntity>>
+
+    @Query("SELECT COUNT(*) FROM favorites WHERE url = :url")
+    fun countByUrl(url: String): Int
+
+    @Insert
+    fun insert(favorite: FavoriteEntity)
+
+    @Query("DELETE FROM favorites WHERE url = :url")
+    fun deleteByUrl(url: String)
+
+    @Query("DELETE FROM favorites")
+    fun deleteAll()
+}
+
+@Dao
+interface HistoryDao {
+    @Query("SELECT * FROM history ORDER BY timestamp DESC LIMIT 100")
+    fun getRecentFlow(): Flow<List<HistoryEntity>>
+
+    @Insert
+    fun insert(entry: HistoryEntity)
+
+    @Query("SELECT * FROM history ORDER BY timestamp DESC LIMIT 1")
+    fun getLast(): HistoryEntity?
+
+    @Query("UPDATE history SET title = :title, timestamp = :time WHERE id = :id")
+    fun updateTitle(id: Long, title: String, time: Long)
+
+    @Query("DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY timestamp DESC LIMIT 100)")
+    fun trim()
+
+    @Query("DELETE FROM history")
+    fun deleteAll()
+}
+
+@Database(
+    entities = [FavoriteEntity::class, HistoryEntity::class],
+    version = 1,
+    exportSchema = false
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun favoriteDao(): FavoriteDao
+    abstract fun historyDao(): HistoryDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        fun getInstance(context: Context): AppDatabase =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "flux.db"
+                ).build().also { INSTANCE = it }
+            }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/core/BrowserViewModel.kt">
+package com.example.flux.core
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.flux.core.db.AppDatabase
+import com.example.flux.core.db.FavoriteEntity
+import com.example.flux.core.db.HistoryEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+class BrowserViewModel(app: Application) : AndroidViewModel(app) {
+    private val favoriteDao = AppDatabase.getInstance(app).favoriteDao()
+    private val historyDao = AppDatabase.getInstance(app).historyDao()
+
+    // 📡 Flux réactifs : les écrans se mettent à jour tout seuls
+    val favorites: StateFlow<List<FavoriteEntity>> =
+        favoriteDao.getAllFlow()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val history: StateFlow<List<HistoryEntity>> =
+        historyDao.getRecentFlow()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ⭐ Favoris
+    fun addFavorite(title: String, url: String) = viewModelScope.launch(Dispatchers.IO) {
+        if (favoriteDao.countByUrl(url) == 0) {
+            favoriteDao.insert(FavoriteEntity(title = title, url = url))
+        }
+    }
+
+    fun removeFavorite(url: String) = viewModelScope.launch(Dispatchers.IO) {
+        favoriteDao.deleteByUrl(url)
+    }
+
+    fun clearFavorites() = viewModelScope.launch(Dispatchers.IO) {
+        favoriteDao.deleteAll()
+    }
+
+    // 📜 Historique
+    fun addVisit(title: String, url: String) = viewModelScope.launch(Dispatchers.IO) {
+        if (url.isBlank() || url.startsWith("about:")) return@launch
+        val last = historyDao.getLast()
+        if (last?.url == url) {
+            // Même page rechargée : on met juste à jour l'heure
+            historyDao.updateTitle(last.id, title, System.currentTimeMillis())
+        } else {
+            historyDao.insert(HistoryEntity(title = title, url = url))
+            historyDao.trim() // Garde max 100 entrées
+        }
+    }
+
+    fun clearHistory() = viewModelScope.launch(Dispatchers.IO) {
+        historyDao.deleteAll()
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/core/GeckoRuntimeHolder.kt">
+package com.example.flux.core
+
+import org.mozilla.geckoview.GeckoRuntime
+
+object GeckoRuntimeHolder {
+    // Le ? indique que cette variable peut être null au démarrage
+    var runtime: GeckoRuntime? = null 
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/core/SearchEngine.kt">
+package com.example.flux.core
+
+import android.net.Uri
+
+enum class SearchEngine(
+    val displayName: String,
+    val homeUrl: String,
+    private val template: String
+) {
+    BRAVE("Brave Search", "https://search.brave.com", "https://search.brave.com/search?q=%s"),
+    DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com", "https://duckduckgo.com/?q=%s"),
+    STARTPAGE("Startpage", "https://www.startpage.com", "https://www.startpage.com/sp/search?query=%s"),
+    QWANT("Qwant", "https://www.qwant.com", "https://www.qwant.com/?q=%s"),
+    GOOGLE("Google", "https://www.google.com", "https://www.google.com/search?q=%s");
+
+    fun searchUrl(query: String): String = template.replace("%s", Uri.encode(query))
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/services/AdBlockerService.kt">
+
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/components/AddressBar.kt">
+
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/components/NavigationButtons.kt">
+
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/theme/Color.kt">
+package com.example.flux.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+val Purple80 = Color(0xFFD0BCFF)
+val PurpleGrey80 = Color(0xFFCCC2DC)
+val Pink80 = Color(0xFFEFB8C8)
+
+val Purple40 = Color(0xFF6650a4)
+val PurpleGrey40 = Color(0xFF625b71)
+val Pink40 = Color(0xFF7D5260)
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/theme/Theme.kt">
+package com.example.flux.ui.theme
+
+import android.app.Activity
+import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+
+private val DarkColorScheme = darkColorScheme(
+    primary = Purple80,
+    secondary = PurpleGrey80,
+    tertiary = Pink80
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = Purple40,
+    secondary = PurpleGrey40,
+    tertiary = Pink40
+
+    /* Other default colors to override
+    background = Color(0xFFFFFBFE),
+    surface = Color(0xFFFFFBFE),
+    onPrimary = Color.White,
+    onSecondary = Color.White,
+    onTertiary = Color.White,
+    onBackground = Color(0xFF1C1B1F),
+    onSurface = Color(0xFF1C1B1F),
+    */
+)
+
+@Composable
+fun FluxTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    // Dynamic color is available on Android 12+
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/theme/Type.kt">
+package com.example.flux.ui.theme
+
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+
+// Set of Material typography styles to start with
+val Typography = Typography(
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.5.sp
+    )
+    /* Other default text styles to override
+    titleLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = 0.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.5.sp
+    )
+    */
+)
+</file>
+
+<file path="app/src/main/res/drawable/ic_launcher_background.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#3DDC84"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M9,0L9,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,0L19,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,0L29,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,0L39,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,0L49,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,0L59,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,0L69,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,0L79,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M89,0L89,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M99,0L99,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,9L108,9"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,19L108,19"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,29L108,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,39L108,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,49L108,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,59L108,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,69L108,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,79L108,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,89L108,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,99L108,99"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,29L89,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,39L89,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,49L89,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,59L89,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,69L89,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,79L89,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,19L29,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,19L39,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,19L49,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,19L59,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,19L69,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,19L79,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+</vector>
+</file>
+
+<file path="app/src/main/res/drawable/ic_launcher_foreground.xml">
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="85.84757"
+                android:endY="92.4963"
+                android:startX="42.9492"
+                android:startY="49.59793"
+                android:type="linear">
+                <item
+                    android:color="#44000000"
+                    android:offset="0.0" />
+                <item
+                    android:color="#00000000"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="nonZero"
+        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
+        android:strokeWidth="1"
+        android:strokeColor="#00000000" />
+</vector>
+</file>
+
+<file path="app/src/main/res/mipmap-anydpi-v26/ic_launcher_flux.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_flux" />
+</adaptive-icon>
+</file>
+
+<file path="app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+</file>
+
+<file path="app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+</file>
+
+<file path="app/src/main/res/values/strings.xml">
+<resources>
+    <string name="app_name">Flux</string>
+</resources>
+</file>
+
+<file path="app/src/main/res/values/themes.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Flux" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
+</file>
+
+<file path="app/src/main/res/xml/backup_rules.xml">
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample backup rules file; uncomment and customize as necessary.
+   See https://developer.android.com/guide/topics/data/autobackup
+   for details.
+   Note: This file is ignored for devices older than API 31
+   See https://developer.android.com/about/versions/12/backup-restore
+-->
+<full-backup-content>
+    <!--
+   <include domain="sharedpref" path="."/>
+   <exclude domain="sharedpref" path="device.xml"/>
+-->
+</full-backup-content>
+</file>
+
+<file path="app/src/main/res/xml/data_extraction_rules.xml">
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample data extraction rules file; uncomment and customize as necessary.
+   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   for details.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- TODO: Use <include> and <exclude> to control what is backed up.
+        <include .../>
+        <exclude .../>
+        -->
+    </cloud-backup>
+    <!--
+    <device-transfer>
+        <include .../>
+        <exclude .../>
+    </device-transfer>
+    -->
+</data-extraction-rules>
+</file>
+
+<file path="app/src/test/java/com/example/flux/ExampleUnitTest.kt">
+package com.example.flux
+
+import org.junit.Test
+
+import org.junit.Assert.*
+
+/**
+ * Example local unit test, which will execute on the development machine (host).
+ *
+ * See [testing documentation](http://d.android.com/tools/testing).
+ */
+class ExampleUnitTest {
+    @Test
+    fun addition_isCorrect() {
+        assertEquals(4, 2 + 2)
+    }
+}
+</file>
+
+<file path="app/.gitignore">
+/build
+</file>
+
+<file path="app/proguard-rules.pro">
+# Add project specific ProGuard rules here.
+# You can control the set of applied configuration files using the
+# proguardFiles setting in build.gradle.
+#
+# For more details, see
+#   http://developer.android.com/guide/developing/tools/proguard.html
+
+# If your project uses WebView with JS, uncomment the following
+# and specify the fully qualified class name to the JavaScript interface
+# class:
+#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
+#   public *;
+#}
+
+# Uncomment this to preserve the line number information for
+# debugging stack traces.
+#-keepattributes SourceFile,LineNumberTable
+
+# If you keep the line number information, uncomment this to
+# hide the original source file name.
+#-renamesourcefileattribute SourceFile
+</file>
+
+<file path="gradle/wrapper/gradle-wrapper.properties">
+#Wed Aug 26 23:10:20 UTC 2026
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
+networkTimeout=10000
+validateDistributionUrl=true
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+</file>
+
+<file path=".gitignore">
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+</file>
+
+<file path="gradle.properties">
+# Project-wide Gradle settings.
+# IDE (e.g. Android Studio) users:
+# Gradle settings configured through the IDE *will override*
+# any settings specified in this file.
+# For more details on how to configure your build environment visit
+# http://www.gradle.org/docs/current/userguide/build_environment.html
+# Specifies the JVM arguments used for the daemon process.
+# The setting is particularly useful for tweaking memory settings.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+# When configured, Gradle will run in incubating parallel mode.
+# This option should only be used with decoupled projects. For more details, visit
+# https://developer.android.com/r/tools/gradle-multi-project-decoupled-projects
+# org.gradle.parallel=true
+# AndroidX package structure to make it clearer which packages are bundled with the
+# Android operating system, and which are packaged with your app's APK
+# https://developer.android.com/topic/libraries/support-library/androidx-rn
+android.useAndroidX=true
+# Kotlin code style for this project: "official" or "obsolete":
+kotlin.code.style=official
+# Enables namespacing of each library's R class so that its R class includes only the
+# resources declared in the library itself and none from the library's dependencies,
+# thereby reducing the size of the R class for that library
+android.nonTransitiveRClass=true
+</file>
+
+<file path="gradlew">
+#!/bin/sh
+
+#
+# Copyright © 2015 the original authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+##############################################################################
+#
+#   Gradle start up script for POSIX generated by Gradle.
+#
+#   Important for running:
+#
+#   (1) You need a POSIX-compliant shell to run this script. If your /bin/sh is
+#       noncompliant, but you have some other compliant shell such as ksh or
+#       bash, then to run this script, type that shell name before the whole
+#       command line, like:
+#
+#           ksh Gradle
+#
+#       Busybox and similar reduced shells will NOT work, because this script
+#       requires all of these POSIX shell features:
+#         * functions;
+#         * expansions «$var», «${var}», «${var:-default}», «${var+SET}»,
+#           «${var#prefix}», «${var%suffix}», and «$( cmd )»;
+#         * compound commands having a testable exit status, especially «case»;
+#         * various built-in commands including «command», «set», and «ulimit».
+#
+#   Important for patching:
+#
+#   (2) This script targets any POSIX shell, so it avoids extensions provided
+#       by Bash, Ksh, etc; in particular arrays are avoided.
+#
+#       The "traditional" practice of packing multiple parameters into a
+#       space-separated string is a well documented source of bugs and security
+#       problems, so this is (mostly) avoided, by progressively accumulating
+#       options in "$@", and eventually passing that to Java.
+#
+#       Where the inherited environment variables (DEFAULT_JVM_OPTS, JAVA_OPTS,
+#       and GRADLE_OPTS) rely on word-splitting, this is performed explicitly;
+#       see the in-line comments for details.
+#
+#       There are tweaks for specific operating systems such as AIX, CygWin,
+#       Darwin, MinGW, and NonStop.
+#
+#   (3) This script is generated from the Groovy template
+#       https://github.com/gradle/gradle/blob/HEAD/platforms/jvm/plugins-application/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt
+#       within the Gradle project.
+#
+#       You can find Gradle at https://github.com/gradle/gradle/.
+#
+##############################################################################
+
+# Attempt to set APP_HOME
+
+# Resolve links: $0 may be a link
+app_path=$0
+
+# Need this for daisy-chained symlinks.
+while
+    APP_HOME=${app_path%"${app_path##*/}"}  # leaves a trailing /; empty if no leading path
+    [ -h "$app_path" ]
+do
+    ls=$( ls -ld "$app_path" )
+    link=${ls#*' -> '}
+    case $link in             #(
+      /*)   app_path=$link ;; #(
+      *)    app_path=$APP_HOME$link ;;
+    esac
+done
+
+# This is normally unused
+# shellcheck disable=SC2034
+APP_BASE_NAME=${0##*/}
+# Discard cd standard output in case $CDPATH is set (https://github.com/gradle/gradle/issues/25036)
+APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s\n' "$PWD" ) || exit
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD=maximum
+
+warn () {
+    echo "$*"
+} >&2
+
+die () {
+    echo
+    echo "$*"
+    echo
+    exit 1
+} >&2
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "$( uname )" in                #(
+  CYGWIN* )         cygwin=true  ;; #(
+  Darwin* )         darwin=true  ;; #(
+  MSYS* | MINGW* )  msys=true    ;; #(
+  NONSTOP* )        nonstop=true ;;
+esac
+
+CLASSPATH="\\\"\\\""
+
+
+# Determine the Java command to use to start the JVM.
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD=$JAVA_HOME/jre/sh/java
+    else
+        JAVACMD=$JAVA_HOME/bin/java
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD=java
+    if ! command -v java >/dev/null 2>&1
+    then
+        die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+fi
+
+# Increase the maximum file descriptors if we can.
+if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
+    case $MAX_FD in #(
+      max*)
+        # In POSIX sh, ulimit -H is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
+        MAX_FD=$( ulimit -H -n ) ||
+            warn "Could not query maximum file descriptor limit"
+    esac
+    case $MAX_FD in  #(
+      '' | soft) :;; #(
+      *)
+        # In POSIX sh, ulimit -n is undefined. That's why the result is checked to see if it worked.
+        # shellcheck disable=SC2039,SC3045
+        ulimit -n "$MAX_FD" ||
+            warn "Could not set maximum file descriptor limit to $MAX_FD"
+    esac
+fi
+
+# Collect all arguments for the java command, stacking in reverse order:
+#   * args from the command line
+#   * the main class name
+#   * -classpath
+#   * -D...appname settings
+#   * --module-path (only if needed)
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and GRADLE_OPTS environment variables.
+
+# For Cygwin or MSYS, switch paths to Windows format before running java
+if "$cygwin" || "$msys" ; then
+    APP_HOME=$( cygpath --path --mixed "$APP_HOME" )
+    CLASSPATH=$( cygpath --path --mixed "$CLASSPATH" )
+
+    JAVACMD=$( cygpath --unix "$JAVACMD" )
+
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    for arg do
+        if
+            case $arg in                                #(
+              -*)   false ;;                            # don't mess with options #(
+              /?*)  t=${arg#/} t=/${t%%/*}              # looks like a POSIX filepath
+                    [ -e "$t" ] ;;                      #(
+              *)    false ;;
+            esac
+        then
+            arg=$( cygpath --path --ignore --mixed "$arg" )
+        fi
+        # Roll the args list around exactly as many times as the number of
+        # args, so each arg winds up back in the position where it started, but
+        # possibly modified.
+        #
+        # NB: a `for` loop captures its iteration list before it begins, so
+        # changing the positional parameters here affects neither the number of
+        # iterations, nor the values presented in `arg`.
+        shift                   # remove old arg
+        set -- "$@" "$arg"      # push replacement arg
+    done
+fi
+
+
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+
+# Collect all arguments for the java command:
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and optsEnvironmentVar are not allowed to contain shell fragments,
+#     and any embedded shellness will be escaped.
+#   * For example: A user cannot expect ${Hostname} to be expanded, as it is an environment variable and will be
+#     treated as '${Hostname}' itself on the command line.
+
+set -- \
+        "-Dorg.gradle.appname=$APP_BASE_NAME" \
+        -classpath "$CLASSPATH" \
+        -jar "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+        "$@"
+
+# Stop when "xargs" is not available.
+if ! command -v xargs >/dev/null 2>&1
+then
+    die "xargs is not available"
+fi
+
+# Use "xargs" to parse quoted args.
+#
+# With -n1 it outputs one arg per line, with the quotes and backslashes removed.
+#
+# In Bash we could simply go:
+#
+#   readarray ARGS < <( xargs -n1 <<<"$var" ) &&
+#   set -- "${ARGS[@]}" "$@"
+#
+# but POSIX shell has neither arrays nor command substitution, so instead we
+# post-process each arg (as a line of input to sed) to backslash-escape any
+# character that might be a shell metacharacter, then use eval to reverse
+# that process (while maintaining the separation between arguments), and wrap
+# the whole thing up as a single "set" statement.
+#
+# This will of course break if any of these variables contains a newline or
+# an unmatched quote.
+#
+
+eval "set -- $(
+        printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
+        xargs -n1 |
+        sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' |
+        tr '\n' ' '
+    )" '"$@"'
+
+exec "$JAVACMD" "$@"
+</file>
+
+<file path="gradlew.bat">
+@rem
+@rem Copyright 2015 the original author or authors.
+@rem
+@rem Licensed under the Apache License, Version 2.0 (the "License");
+@rem you may not use this file except in compliance with the License.
+@rem You may obtain a copy of the License at
+@rem
+@rem      https://www.apache.org/licenses/LICENSE-2.0
+@rem
+@rem Unless required by applicable law or agreed to in writing, software
+@rem distributed under the License is distributed on an "AS IS" BASIS,
+@rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+@rem See the License for the specific language governing permissions and
+@rem limitations under the License.
+@rem
+@rem SPDX-License-Identifier: Apache-2.0
+@rem
+
+@if "%DEBUG%"=="" @echo off
+@rem ##########################################################################
+@rem
+@rem  Gradle startup script for Windows
+@rem
+@rem ##########################################################################
+
+@rem Set local scope for the variables with windows NT shell
+if "%OS%"=="Windows_NT" setlocal
+
+set DIRNAME=%~dp0
+if "%DIRNAME%"=="" set DIRNAME=.
+@rem This is normally unused
+set APP_BASE_NAME=%~n0
+set APP_HOME=%DIRNAME%
+
+@rem Resolve any "." and ".." in APP_HOME to make it shorter.
+for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
+
+@rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
+
+@rem Find java.exe
+if defined JAVA_HOME goto findJavaFromJavaHome
+
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version >NUL 2>&1
+if %ERRORLEVEL% equ 0 goto execute
+
+echo. 1>&2
+echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH. 1>&2
+echo. 1>&2
+echo Please set the JAVA_HOME variable in your environment to match the 1>&2
+echo location of your Java installation. 1>&2
+
+goto fail
+
+:findJavaFromJavaHome
+set JAVA_HOME=%JAVA_HOME:"=%
+set JAVA_EXE=%JAVA_HOME%/bin/java.exe
+
+if exist "%JAVA_EXE%" goto execute
+
+echo. 1>&2
+echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME% 1>&2
+echo. 1>&2
+echo Please set the JAVA_HOME variable in your environment to match the 1>&2
+echo location of your Java installation. 1>&2
+
+goto fail
+
+:execute
+@rem Setup the command line
+
+set CLASSPATH=
+
+
+@rem Execute Gradle
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %*
+
+:end
+@rem End local scope for the variables with windows NT shell
+if %ERRORLEVEL% equ 0 goto mainEnd
+
+:fail
+rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
+rem the _cmd.exe /c_ return code!
+set EXIT_CODE=%ERRORLEVEL%
+if %EXIT_CODE% equ 0 set EXIT_CODE=1
+if not ""=="%GRADLE_EXIT_CONSOLE%" exit %EXIT_CODE%
+exit /b %EXIT_CODE%
+
+:mainEnd
+if "%OS%"=="Windows_NT" endlocal
+
+:omega
+</file>
+
+<file path="README.md">
+# 🌐 Flux
+
+**Flux** est un navigateur web natif pour Android, construit avec **Jetpack Compose** et propulsé par le moteur **GeckoView** (le moteur de rendu de Firefox). Léger, rapide et respectueux de la vie privée, il propose une expérience de navigation moderne avec gestion des onglets, favoris, historique et choix du moteur de recherche.
+
+## ✨ Fonctionnalités
+
+- 🦊 **Moteur GeckoView** — rendu web basé sur Firefox pour une navigation fiable et sécurisée
+- 🗂️ **Navigation par onglets** — ouverture et gestion de plusieurs onglets simultanément
+- 🔍 **Moteurs de recherche multiples** — Brave Search, DuckDuckGo, Startpage, Qwant, Google
+- ⭐ **Favoris** — sauvegarde et accès rapide aux pages préférées
+- 🕘 **Historique** — suivi des pages visitées (persisté localement, limité aux 100 dernières entrées)
+- 🌗 **Mode sombre** — activable dans les paramètres
+- 💾 **Persistance locale** — favoris et historique stockés via Room (SQLite)
+- 🏠 **Page d'accueil personnalisée** — accès rapide aux favoris
+
+## 🛠️ Stack technique
+
+| Composant | Technologie |
+|---|---|
+| Langage | Kotlin |
+| UI | Jetpack Compose (Material 3) |
+| Moteur de rendu web | [GeckoView](https://mozilla.github.io/geckoview/) 129 |
+| Base de données locale | Room (SQLite) |
+| Architecture | MVVM (ViewModel + State) |
+| Asynchrone | Kotlin Coroutines / Flow |
+| Build | Gradle (Kotlin DSL) |
+
+## 📋 Prérequis
+
+- [Android Studio](https://developer.android.com/studio) (Koala ou plus récent recommandé)
+- JDK 17
+- SDK Android : minSdk 24, targetSdk 34, compileSdk 34
+
+## 🚀 Installation
+
+1. **Cloner le dépôt**
+   ```bash
+   git clone https://github.com/Cino-helis/Flux.git
+   cd Flux
+   ```
+
+2. **Ouvrir le projet**
+   Ouvrir le dossier `Flux` dans Android Studio et laisser Gradle synchroniser les dépendances.
+
+3. **Lancer l'application**
+   - Via Android Studio : sélectionner un émulateur ou un appareil physique (API 24+) et cliquer sur **Run**
+   - Ou en ligne de commande :
+     ```bash
+     ./gradlew assembleDebug
+     ```
+     L'APK généré se trouve dans `app/build/outputs/apk/debug/`.
+
+## 📁 Structure du projet
+
+```
+Flux/
+├── app/
+│   └── src/main/java/com/example/flux/
+│       ├── MainActivity.kt              # Point d'entrée de l'application
+│       ├── core/
+│       │   ├── BrowserViewModel.kt      # Logique métier du navigateur (onglets, navigation)
+│       │   ├── GeckoRuntimeHolder.kt    # Instance partagée du runtime GeckoView
+│       │   ├── PreferencesManager.kt    # Gestion des préférences (moteur de recherche, thème)
+│       │   ├── SearchEngine.kt          # Définition des moteurs de recherche disponibles
+│       │   ├── Tab.kt                   # Modèle d'un onglet
+│       │   └── db/
+│       │       └── AppDatabase.kt       # Base Room : favoris & historique
+│       ├── services/
+│       │   └── AdBlockerService.kt      # Service de blocage de publicités
+│       └── ui/
+│           ├── components/              # Composants réutilisables (barre d'adresse, navigation)
+│           ├── screens/                 # Écrans (navigateur, favoris, historique, paramètres, accueil)
+│           └── theme/                   # Thème Material (couleurs, typographie)
+└── gradle/                              # Configuration Gradle et versions des dépendances
+```
+
+## 🗺️ Roadmap
+
+- [ ] Blocage de publicités complet (le service `AdBlockerService` est en place mais pas encore implémenté)
+- [ ] Mode navigation privée
+- [ ] Synchronisation des favoris/historique dans le cloud
+- [ ] Gestion des téléchargements
+- [ ] Extensions / bloqueurs de trackers avancés
+
+## 👤 Auteur
+
+**Cino** ([@Cino-helis](https://github.com/Cino-helis)) — Développeur full-stack (Flutter, Laravel, Django, Vue.js)
+
+## 📄 Licence
+
+Ce projet n'a pas encore de licence définie. Ajoutez un fichier `LICENSE` si vous souhaitez le rendre open-source sous une licence spécifique (MIT, Apache 2.0, etc.).
+</file>
+
+<file path="settings.gradle.kts">
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://maven.mozilla.org/maven2/") } // <-- OBLIGATOIRE
+    }
+}
+
+rootProject.name = "Flux"
+include(":app")
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/screens/HistoryScreen.kt">
+package com.example.flux.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.example.flux.core.BrowserViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun HistoryScreen(
+    viewModel: BrowserViewModel,
+    onBack: () -> Unit,
+    onOpenUrl: (String) -> Unit
+) {
+    // 🆕 Observe l'historique en temps réel
+    val history by viewModel.history.collectAsState()
+    val dateFormat = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
+
+    BackHandler { onBack() }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour") }
+                Text(
+                    "Historique",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                if (history.isNotEmpty()) {
+                    TextButton(onClick = {
+                        // 🆕 Efface via le ViewModel
+                        viewModel.clearHistory()
+                    }) { Text("Effacer") }
+                }
+            }
+
+            if (history.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Aucun historique pour l'instant.")
+                }
+            } else {
+                LazyColumn {
+                    items(history, key = { it.id }) { visit ->
+                        ListItem(
+                            headlineContent = {
+                                Text(visit.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            },
+                            supportingContent = {
+                                Text(visit.url, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    dateFormat.format(Date(visit.timestamp)),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            leadingContent = {
+                                Icon(Icons.AutoMirrored.Filled.List, null, tint = MaterialTheme.colorScheme.primary)
+                            },
+                            modifier = Modifier.clickable { onOpenUrl(visit.url) }
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/screens/HomePage.kt">
+package com.example.flux.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.example.flux.core.BrowserViewModel
+import com.example.flux.core.SearchEngine
+
+@Composable
+fun HomePage(
+    searchEngine: SearchEngine,
+    viewModel: BrowserViewModel,
+    onSearch: (String) -> Unit,
+    onOpenUrl: (String) -> Unit
+) {
+    var searchText by remember { mutableStateOf("") }
+    
+    // 🆕 Observe les favoris depuis Room via le ViewModel
+    val favorites by viewModel.favorites.collectAsState()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(48.dp))
+
+            Text(
+                text = "Flux",
+                style = MaterialTheme.typography.displayLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedTextField(
+                value = searchText,
+                onValueChange = { searchText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                placeholder = { Text("Rechercher ou entrer une URL") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        if (searchText.isNotBlank()) {
+                            onSearch(searchText)
+                            searchText = ""
+                        }
+                    }
+                )
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            if (favorites.isNotEmpty()) {
+                Text(
+                    text = "Favoris",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, bottom = 12.dp)
+                )
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(favorites) { fav ->
+                        FavoriteCard(
+                            title = fav.title,
+                            url = fav.url,
+                            onClick = { onOpenUrl(fav.url) }
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Ajoute des favoris pour les voir ici",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+fun FavoriteCard(
+    title: String,
+    url: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Icon(
+                Icons.Default.Star,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = url.removePrefix("https://").removePrefix("http://").take(30),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/screens/SettingsScreen.kt">
+package com.example.flux.ui.screens
+
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.example.flux.core.BrowserViewModel
+import com.example.flux.core.PreferencesManager
+import com.example.flux.core.SearchEngine
+
+@Composable
+fun SettingsScreen(
+    viewModel: BrowserViewModel,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    var searchEngine by remember { mutableStateOf(PreferencesManager.loadSearchEngine(context)) }
+    var isDarkMode by remember { mutableStateOf(PreferencesManager.loadDarkMode(context)) }
+    var showClearDialog by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                }
+                Text("Paramètres", style = MaterialTheme.typography.titleLarge)
+            }
+
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Recherche",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                )
+                
+                Box {
+                    var engineMenuOpen by remember { mutableStateOf(false) }
+                    ListItem(
+                        headlineContent = { Text("Moteur de recherche") },
+                        supportingContent = { Text(searchEngine.displayName) },
+                        leadingContent = { Icon(Icons.Default.Search, null) },
+                        modifier = Modifier.clickable { engineMenuOpen = true }
+                    )
+                    DropdownMenu(expanded = engineMenuOpen, onDismissRequest = { engineMenuOpen = false }) {
+                        SearchEngine.entries.forEach { engine ->
+                            DropdownMenuItem(
+                                text = { Text(if (engine == searchEngine) "✓ ${engine.displayName}" else engine.displayName) },
+                                onClick = {
+                                    searchEngine = engine
+                                    PreferencesManager.saveSearchEngine(context, engine)
+                                    engineMenuOpen = false
+                                    Toast.makeText(context, "Moteur changé : ${engine.displayName}", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                Text(
+                    "Apparence",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                )
+                
+                ListItem(
+                    headlineContent = { Text("Mode sombre") },
+                    supportingContent = { Text(if (isDarkMode) "Activé" else "Désactivé") },
+                    leadingContent = { Icon(Icons.Default.Settings, null) },
+                    trailingContent = {
+                        Switch(
+                            checked = isDarkMode,
+                            onCheckedChange = {
+                                isDarkMode = it
+                                PreferencesManager.saveDarkMode(context, isDarkMode)
+                            }
+                        )
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                Text(
+                    "Données",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                )
+                
+                ListItem(
+                    headlineContent = { Text("Effacer les données") },
+                    supportingContent = { Text("Favoris, historique, paramètres") },
+                    leadingContent = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                    modifier = Modifier.clickable { showClearDialog = true }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                Text(
+                    "À propos",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                )
+                
+                ListItem(
+                    headlineContent = { Text("Flux Browser") },
+                    supportingContent = { Text("Version 1.0 - Navigateur privé") },
+                    leadingContent = { Icon(Icons.Default.Info, null) }
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Effacer toutes les données ?") },
+            text = { Text("Cette action supprimera vos favoris, votre historique et réinitialisera les paramètres.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    // 🆕 Efface via le ViewModel
+                    PreferencesManager.saveSearchEngine(context, SearchEngine.BRAVE)
+                    PreferencesManager.saveDarkMode(context, false)
+                    viewModel.clearHistory()
+                    viewModel.clearFavorites()
+                    searchEngine = SearchEngine.BRAVE
+                    isDarkMode = false
+                    showClearDialog = false
+                    Toast.makeText(context, "✓ Données effacées", Toast.LENGTH_SHORT).show()
+                }) { Text("Effacer") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) { Text("Annuler") }
+            }
+        )
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/MainActivity.kt">
+package com.example.flux
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import com.example.flux.core.PreferencesManager
+import com.example.flux.ui.screens.BrowserScreen
+import com.example.flux.core.GeckoRuntimeHolder
+import org.mozilla.geckoview.ContentBlocking
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoRuntimeSettings
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        if (GeckoRuntimeHolder.runtime == null) {
+            val contentBlockingSettings = ContentBlocking.Settings.Builder()
+                .antiTracking(
+                    ContentBlocking.AntiTracking.AD or
+                    ContentBlocking.AntiTracking.ANALYTIC or
+                    ContentBlocking.AntiTracking.SOCIAL or
+                    ContentBlocking.AntiTracking.CRYPTOMINING or
+                    ContentBlocking.AntiTracking.FINGERPRINTING
+                )
+                .safeBrowsing(
+                    ContentBlocking.SafeBrowsing.MALWARE or
+                    ContentBlocking.SafeBrowsing.PHISHING
+                )
+                .cookieBehavior(ContentBlocking.CookieBehavior.ACCEPT_NON_TRACKERS)
+                .build()
+
+            val darkMode = PreferencesManager.loadDarkMode(this)
+            val runtimeSettings = GeckoRuntimeSettings.Builder()
+                .contentBlocking(contentBlockingSettings)
+                .preferredColorScheme(
+                    if (darkMode) GeckoRuntimeSettings.COLOR_SCHEME_DARK
+                    else GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
+                )
+                .build()
+
+            GeckoRuntimeHolder.runtime = GeckoRuntime.create(this, runtimeSettings)
+        }
+
+        setContent {
+            MaterialTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    BrowserScreen()
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (this.isFinishing) {
+            GeckoRuntimeHolder.runtime?.shutdown()
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/res/values/colors.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="launcher_background">#1C1B1F</color>
+</resources>
+</file>
+
+<file path="app/src/main/AndroidManifest.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher_flux"
+        android:label="Flux"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Flux">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Flux">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
+</file>
+
+<file path="app/build.gradle.kts">
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.kapt)   // 🆕
+}
+
+android {
+    namespace = "com.example.flux"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.example.flux"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+}
+
+dependencies {
+    // 1. Dépendances Android de base
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+    implementation("androidx.activity:activity-compose:1.9.1")
+
+    // 2. Jetpack Compose
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // 3. MOTEUR GECKOVIEW 🦊
+    implementation("org.mozilla.geckoview:geckoview:129.0.20240819150008")
+
+    // 4. 🆕 ROOM (SQLite intégré)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
+
+    // 5. 🆕 ViewModel + Coroutines pour Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+}
+</file>
+
+<file path="gradle/libs.versions.toml">
+[versions]
+agp = "8.13.2"
+kotlin = "2.0.21"
+coreKtx = "1.19.0"
+junit = "4.13.2"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+lifecycleRuntimeKtx = "2.11.0"
+activityCompose = "1.13.0"
+composeBom = "2024.09.00"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+</file>
+
+<file path="build.gradle.kts">
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.kapt) apply false
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/core/Tab.kt">
+package com.example.flux.core
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import org.mozilla.geckoview.GeckoSession
+
+data class Tab(
+    val id: String,
+    val session: GeckoSession
+) {
+    var title by mutableStateOf("Nouvel onglet")
+    var url by mutableStateOf(SearchEngine.BRAVE.homeUrl)
+    var blockedCount by mutableStateOf(0)
+    var canGoBack by mutableStateOf(false)
+    var canGoForward by mutableStateOf(false)
+    var isFullScreen by mutableStateOf(false)
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/screens/FavoritesScreen.kt">
+package com.example.flux.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.example.flux.core.BrowserViewModel
+
+@Composable
+fun FavoritesScreen(
+    viewModel: BrowserViewModel,
+    onBack: () -> Unit,
+    onOpenUrl: (String) -> Unit
+) {
+    // 🆕 Observe les favoris en temps réel
+    val favorites by viewModel.favorites.collectAsState()
+
+    BackHandler { onBack() }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour") }
+                Text("Favoris", style = MaterialTheme.typography.titleLarge)
+            }
+
+            if (favorites.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Aucun favori pour l'instant.\nUtilise ☰ → Ajouter aux favoris !")
+                }
+            } else {
+                LazyColumn {
+                    items(favorites, key = { it.url }) { fav ->
+                        ListItem(
+                            headlineContent = { Text(fav.title) },
+                            supportingContent = {
+                                Text(fav.url, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            },
+                            leadingContent = {
+                                Icon(Icons.Default.Star, null, tint = MaterialTheme.colorScheme.primary)
+                            },
+                            trailingContent = {
+                                IconButton(onClick = {
+                                    // 🆕 Supprime via le ViewModel
+                                    viewModel.removeFavorite(fav.url)
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Supprimer")
+                                }
+                            },
+                            modifier = Modifier.clickable { onOpenUrl(fav.url) }
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/core/PreferencesManager.kt">
+package com.example.flux.core
+
+import android.content.Context
+import android.content.SharedPreferences
+
+object PreferencesManager {
+    private const val PREFS_NAME = "flux_prefs"
+    private const val KEY_SEARCH_ENGINE = "search_engine"
+    private const val KEY_DARK_MODE = "dark_mode"
+
+    private fun prefs(context: Context): SharedPreferences =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    fun saveSearchEngine(context: Context, engine: SearchEngine) {
+        prefs(context).edit().putString(KEY_SEARCH_ENGINE, engine.name).commit()
+    }
+
+    fun loadSearchEngine(context: Context): SearchEngine {
+        val name = prefs(context).getString(KEY_SEARCH_ENGINE, SearchEngine.BRAVE.name)
+        return try { SearchEngine.valueOf(name!!) } catch (e: Exception) { SearchEngine.BRAVE }
+    }
+
+    fun saveDarkMode(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DARK_MODE, enabled).commit()
+    }
+
+    fun loadDarkMode(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DARK_MODE, false)
+}
+</file>
+
+<file path="app/src/main/java/com/example/flux/ui/screens/BrowserScreen.kt">
+package com.example.flux.ui.screens
+
+import android.content.Context
+import android.content.Intent
+import android.view.ViewGroup
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.flux.core.BrowserViewModel
+import com.example.flux.core.GeckoRuntimeHolder
+import com.example.flux.core.PreferencesManager
+import com.example.flux.core.SearchEngine
+import com.example.flux.core.Tab
+import org.mozilla.geckoview.ContentBlocking
+import org.mozilla.geckoview.GeckoResult
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoRuntimeSettings
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
+import org.mozilla.geckoview.GeckoView
+import java.util.UUID
+
+fun normalizeInput(input: String, engine: SearchEngine): String {
+    val trimmed = input.trim()
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
+    val urlPattern = Regex("^[a-zA-Z0-9\\-]+(\\.[a-zA-Z0-9\\-]+)+(/\\S*)?$")
+    if (urlPattern.matches(trimmed)) return "https://$trimmed"
+    return engine.searchUrl(trimmed)
+}
+
+fun createTab(runtime: GeckoRuntime, context: Context): Tab {
+    val sessionSettings = GeckoSessionSettings.Builder()
+        .suspendMediaWhenInactive(false)
+        .build()
+
+    val tab = Tab(id = UUID.randomUUID().toString(), session = GeckoSession(sessionSettings))
+    tab.session.open(runtime)
+    tab.url = PreferencesManager.loadSearchEngine(context).homeUrl
+
+    tab.session.contentBlockingDelegate = object : ContentBlocking.Delegate {
+        override fun onContentBlocked(s: GeckoSession, e: ContentBlocking.BlockEvent) { tab.blockedCount++ }
+        override fun onContentLoaded(s: GeckoSession, e: ContentBlocking.BlockEvent) {}
+    }
+
+    tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
+        override fun onCanGoBack(s: GeckoSession, can: Boolean) { tab.canGoBack = can }
+        override fun onCanGoForward(s: GeckoSession, can: Boolean) { tab.canGoForward = can }
+    }
+
+    tab.session.contentDelegate = object : GeckoSession.ContentDelegate {
+        override fun onTitleChange(s: GeckoSession, title: String?) {
+            if (!title.isNullOrBlank()) tab.title = title
+        }
+        override fun onFullScreen(s: GeckoSession, fullScreen: Boolean) {
+            tab.isFullScreen = fullScreen
+        }
+    }
+
+    tab.session.permissionDelegate = object : GeckoSession.PermissionDelegate {
+        override fun onContentPermissionRequest(
+            s: GeckoSession,
+            perm: GeckoSession.PermissionDelegate.ContentPermission
+        ): GeckoResult<Int> {
+            val response = when (perm.permission) {
+                GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE,
+                GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE,
+                GeckoSession.PermissionDelegate.PERMISSION_MEDIA_KEY_SYSTEM_ACCESS ->
+                    GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW
+                else -> GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY
+            }
+            return GeckoResult.fromValue(response)
+        }
+
+        override fun onMediaPermissionRequest(
+            s: GeckoSession,
+            uri: String,
+            video: Array<GeckoSession.PermissionDelegate.MediaSource>?,
+            audio: Array<GeckoSession.PermissionDelegate.MediaSource>?,
+            callback: GeckoSession.PermissionDelegate.MediaCallback
+        ) {
+            callback.grant(video?.firstOrNull()?.id, audio?.firstOrNull()?.id)
+        }
+    }
+
+    return tab
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BrowserScreen() {
+    val activity = LocalContext.current as? ComponentActivity
+    val viewModel: BrowserViewModel = viewModel(viewModelStoreOwner = activity!!)
+
+    val context = LocalContext.current
+    val runtime = GeckoRuntimeHolder.runtime!!
+    var searchEngine by remember { mutableStateOf(PreferencesManager.loadSearchEngine(context)) }
+    var isDarkMode by remember { mutableStateOf(PreferencesManager.loadDarkMode(context)) }
+    var showFavorites by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+
+    // 🆕 État du pull-to-refresh : true pendant le chargement
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    val firstTab = remember { createTab(runtime, context) }
+    val tabs = remember { mutableStateListOf(firstTab) }
+    var activeTabId by remember { mutableStateOf(firstTab.id) }
+    val activeTab = tabs.find { it.id == activeTabId } ?: tabs.first()
+
+    var urlInput by remember(activeTabId) { mutableStateOf(activeTab.url) }
+    var isUrlFieldFocused by remember { mutableStateOf(false) }
+
+    // ⬅️ Bouton retour intelligent
+    BackHandler(
+        enabled = activeTab.isFullScreen || showSettings || showFavorites || showHistory || activeTab.canGoBack
+    ) {
+        when {
+            activeTab.isFullScreen -> activeTab.session.exitFullScreen()
+            showSettings -> showSettings = false
+            showFavorites -> showFavorites = false
+            showHistory -> showHistory = false
+            else -> activeTab.session.goBack()
+        }
+    }
+
+    // 🎬 Plein écran : masque les barres système
+    val window = activity.window
+    LaunchedEffect(activeTab.isFullScreen) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (activeTab.isFullScreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    LaunchedEffect(activeTab.url) {
+        if (!isUrlFieldFocused) urlInput = activeTab.url
+    }
+
+    val onNewTab: () -> Unit = {
+        val newTab = createTab(runtime, context)
+        tabs.add(newTab)
+        activeTabId = newTab.id
+    }
+
+    val openUrlInActiveTab: (String) -> Unit = { url ->
+        activeTab.url = url
+        urlInput = url
+        activeTab.session.loadUri(url)
+        showFavorites = false
+        showHistory = false
+        showSettings = false
+    }
+
+    val goHome: () -> Unit = {
+        activeTab.url = searchEngine.homeUrl
+        activeTab.title = "Nouvel onglet"
+        urlInput = searchEngine.homeUrl
+        activeTab.session.loadUri(searchEngine.homeUrl)
+    }
+
+    // 🆕 Historique + gestion du pull-to-refresh
+    DisposableEffect(activeTab.session) {
+        val delegate = object : GeckoSession.ProgressDelegate {
+            override fun onPageStart(s: GeckoSession, url: String) {
+                isRefreshing = true  // 🔥 Le spinner tourne
+                if (!url.startsWith("about:")) activeTab.url = url
+            }
+            override fun onPageStop(s: GeckoSession, success: Boolean) {
+                isRefreshing = false // ⏹️ Le spinner s'arrête
+                if (success &&
+                    !activeTab.url.startsWith("about:") &&
+                    SearchEngine.entries.none { it.homeUrl == activeTab.url }
+                ) {
+                    viewModel.addVisit(activeTab.title, activeTab.url)
+                }
+            }
+        }
+        activeTab.session.progressDelegate = delegate
+        onDispose {}
+    }
+
+    LaunchedEffect(isDarkMode) {
+        runtime.settings.preferredColorScheme =
+            if (isDarkMode) GeckoRuntimeSettings.COLOR_SCHEME_DARK
+            else GeckoRuntimeSettings.COLOR_SCHEME_LIGHT
+    }
+
+    MaterialTheme(colorScheme = if (isDarkMode) darkColorScheme() else lightColorScheme()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (!activeTab.isFullScreen) Modifier.statusBarsPadding() else Modifier)
+                ) {
+                    if (!activeTab.isFullScreen) {
+                        TabBar(
+                            tabs = tabs,
+                            activeTabId = activeTabId,
+                            onTabSelected = { activeTabId = it },
+                            onTabClosed = { tabId ->
+                                tabs.find { it.id == tabId }?.session?.close()
+                                tabs.removeAll { it.id == tabId }
+                                if (tabs.isEmpty()) {
+                                    val t = createTab(runtime, context); tabs.add(t); activeTabId = t.id
+                                } else if (activeTabId == tabId) {
+                                    activeTabId = tabs.last().id
+                                }
+                            }
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = urlInput,
+                                onValueChange = { urlInput = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .onFocusChanged { isUrlFieldFocused = it.isFocused },
+                                label = { Text("URL ou recherche") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                                keyboardActions = KeyboardActions(onGo = {
+                                    openUrlInActiveTab(normalizeInput(urlInput, searchEngine))
+                                })
+                            )
+                            Box {
+                                var menuOpen by remember { mutableStateOf(false) }
+                                IconButton(onClick = { menuOpen = true }) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = "Moteur")
+                                }
+                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                    SearchEngine.entries.forEach { engine ->
+                                        DropdownMenuItem(
+                                            text = { Text(if (engine == searchEngine) "✓ ${engine.displayName}" else engine.displayName) },
+                                            onClick = { searchEngine = engine; PreferencesManager.saveSearchEngine(context, engine); menuOpen = false }
+                                        )
+                                    }
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text(if (isDarkMode) "✓ Mode sombre" else "Mode sombre") },
+                                        onClick = { isDarkMode = !isDarkMode; PreferencesManager.saveDarkMode(context, isDarkMode) }
+                                    )
+                                }
+                            }
+                            Button(onClick = { openUrlInActiveTab(normalizeInput(urlInput, searchEngine)) }) { Text("Go") }
+                        }
+
+                        NavigationRow(
+                            tab = activeTab,
+                            onNewTab = onNewTab,
+                            onHome = goHome,
+                            onAddFavorite = {
+                                viewModel.addFavorite(activeTab.title, activeTab.url)
+                                Toast.makeText(context, "⭐ Ajouté aux favoris !", Toast.LENGTH_SHORT).show()
+                            },
+                            onOpenFavorites = { showFavorites = true },
+                            onOpenHistory = { showHistory = true },
+                            onOpenSettings = { showSettings = true },
+                            onShare = {
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, activeTab.url)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Partager via"))
+                            }
+                        )
+                    }
+
+                    val shouldShowHomePage =
+                        activeTab.url == searchEngine.homeUrl ||
+                        SearchEngine.entries.any { engine -> activeTab.url == engine.homeUrl }
+
+                    // 🔄 Pull-to-refresh : API native Material 3 1.2.x
+                    val pullToRefreshState = rememberPullToRefreshState()
+                    
+                    // Lance le refresh quand l'utilisateur tire
+                    if (pullToRefreshState.isRefreshing) {
+                        LaunchedEffect(true) {
+                            activeTab.session.reload()
+                            // Petit délai pour que l'utilisateur voie le spinner
+                            kotlinx.coroutines.delay(300)
+                            pullToRefreshState.endRefresh()
+                        }
+                    }
+                    
+                    // Synchronise l'état isRefreshing avec le pull
+                    LaunchedEffect(isRefreshing) {
+                        if (!isRefreshing) pullToRefreshState.endRefresh()
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                    ) {
+                        if (shouldShowHomePage && !activeTab.isFullScreen) {
+                            HomePage(
+                                searchEngine = searchEngine,
+                                viewModel = viewModel,
+                                onSearch = { query -> openUrlInActiveTab(normalizeInput(query, searchEngine)) },
+                                onOpenUrl = { url -> openUrlInActiveTab(url) }
+                            )
+                        } else {
+                            GeckoViewComposable(modifier = Modifier.fillMaxSize(), activeSession = activeTab.session)
+                        }
+                        
+                        // Le spinner de refresh
+                        PullToRefreshContainer(
+                            state = pullToRefreshState,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                        )
+                    }
+                }
+            }
+
+            if (showFavorites) {
+                FavoritesScreen(
+                    viewModel = viewModel,
+                    onBack = { showFavorites = false },
+                    onOpenUrl = openUrlInActiveTab
+                )
+            }
+            if (showHistory) {
+                HistoryScreen(
+                    viewModel = viewModel,
+                    onBack = { showHistory = false },
+                    onOpenUrl = openUrlInActiveTab
+                )
+            }
+            if (showSettings) {
+                SettingsScreen(
+                    viewModel = viewModel,
+                    onBack = {
+                        showSettings = false
+                        searchEngine = PreferencesManager.loadSearchEngine(context)
+                        isDarkMode = PreferencesManager.loadDarkMode(context)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TabBar(tabs: List<Tab>, activeTabId: String, onTabSelected: (String) -> Unit, onTabClosed: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+            .horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        tabs.forEach { tab ->
+            TabChip(tab = tab, isActive = tab.id == activeTabId, onClick = { onTabSelected(tab.id) }, onClose = { onTabClosed(tab.id) })
+        }
+    }
+}
+
+@Composable
+fun TabChip(tab: Tab, isActive: Boolean, onClick: () -> Unit, onClose: () -> Unit) {
+    Row(
+        modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(8.dp))
+            .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 120.dp),
+            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            Icons.Default.Close, contentDescription = "Fermer",
+            modifier = Modifier.size(16.dp).clickable(onClick = onClose),
+            tint = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+fun NavigationRow(
+    tab: Tab,
+    onNewTab: () -> Unit,
+    onHome: () -> Unit,
+    onAddFavorite: () -> Unit,
+    onOpenFavorites: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onShare: () -> Unit
+) {
+    val session = tab.session
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { session.goBack() }, enabled = tab.canGoBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+        }
+        IconButton(onClick = { session.goForward() }, enabled = tab.canGoForward) {
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Avancer")
+        }
+        IconButton(onClick = { session.reload() }) { Icon(Icons.Default.Refresh, contentDescription = "Rafraîchir") }
+        IconButton(onClick = { session.stop() }) { Icon(Icons.Default.Close, contentDescription = "Arrêter") }
+        IconButton(onClick = onHome) { Icon(Icons.Default.Home, contentDescription = "Accueil") }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Lock, contentDescription = "Bloqués", tint = MaterialTheme.colorScheme.primary)
+            Text(text = "${tab.blockedCount}", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 4.dp))
+        }
+
+        Box {
+            var mainMenuOpen by remember { mutableStateOf(false) }
+            IconButton(onClick = { mainMenuOpen = true }) { Icon(Icons.Default.Menu, contentDescription = "Menu") }
+            DropdownMenu(expanded = mainMenuOpen, onDismissRequest = { mainMenuOpen = false }) {
+                DropdownMenuItem(text = { Text("Nouvel onglet") }, leadingIcon = { Icon(Icons.Default.Add, null) }, onClick = { onNewTab(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Ajouter aux favoris") }, leadingIcon = { Icon(Icons.Default.Star, null) }, onClick = { onAddFavorite(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Favoris") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) }, onClick = { onOpenFavorites(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Historique") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) }, onClick = { onOpenHistory(); mainMenuOpen = false })
+                DropdownMenuItem(text = { Text("Partager") }, leadingIcon = { Icon(Icons.Default.Share, null) }, onClick = { onShare(); mainMenuOpen = false })
+                HorizontalDivider()
+                DropdownMenuItem(text = { Text("Paramètres") }, leadingIcon = { Icon(Icons.Default.Settings, null) }, onClick = { onOpenSettings(); mainMenuOpen = false })
+            }
+        }
+    }
+}
+
+@Composable
+fun GeckoViewComposable(modifier: Modifier = Modifier, activeSession: GeckoSession) {
+    val geckoViewRef = remember { mutableStateOf<GeckoView?>(null) }
+    LaunchedEffect(activeSession) { geckoViewRef.value?.setSession(activeSession) }
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            GeckoView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                geckoViewRef.value = this
+                setSession(activeSession)
+            }
+        },
+        update = { view -> if (view.session != activeSession) view.setSession(activeSession) }
+    )
+}
+</file>
+
+</files>

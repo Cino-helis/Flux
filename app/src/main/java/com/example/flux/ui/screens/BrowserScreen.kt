@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -30,6 +29,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,12 +87,6 @@ fun createTab(runtime: GeckoRuntime, context: Context): Tab {
         override fun onCanGoForward(s: GeckoSession, can: Boolean) { tab.canGoForward = can }
     }
 
-    tab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
-        override fun onPageStart(s: GeckoSession, url: String) {
-            if (!url.startsWith("about:")) tab.url = url
-        }
-    }
-
     tab.session.contentDelegate = object : GeckoSession.ContentDelegate {
         override fun onTitleChange(s: GeckoSession, title: String?) {
             if (!title.isNullOrBlank()) tab.title = title
@@ -129,9 +125,9 @@ fun createTab(runtime: GeckoRuntime, context: Context): Tab {
     return tab
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowserScreen() {
-    // 🆕 Récupère le ViewModel (singleton, survit aux changements de config)
     val activity = LocalContext.current as? ComponentActivity
     val viewModel: BrowserViewModel = viewModel(viewModelStoreOwner = activity!!)
 
@@ -142,6 +138,9 @@ fun BrowserScreen() {
     var showFavorites by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+
+    // 🆕 État du pull-to-refresh : true pendant le chargement
+    var isRefreshing by remember { mutableStateOf(false) }
 
     val firstTab = remember { createTab(runtime, context) }
     val tabs = remember { mutableStateListOf(firstTab) }
@@ -165,17 +164,15 @@ fun BrowserScreen() {
     }
 
     // 🎬 Plein écran : masque les barres système
-    val window = activity?.window
+    val window = activity.window
     LaunchedEffect(activeTab.isFullScreen) {
-        window?.let { w ->
-            val controller = WindowCompat.getInsetsController(w, w.decorView)
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            if (activeTab.isFullScreen) {
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-            } else {
-                controller.show(WindowInsetsCompat.Type.systemBars())
-            }
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (activeTab.isFullScreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 
@@ -205,10 +202,15 @@ fun BrowserScreen() {
         activeTab.session.loadUri(searchEngine.homeUrl)
     }
 
-    // 🆕 Enregistre dans l'historique quand une page se charge
+    // 🆕 Historique + gestion du pull-to-refresh
     DisposableEffect(activeTab.session) {
         val delegate = object : GeckoSession.ProgressDelegate {
+            override fun onPageStart(s: GeckoSession, url: String) {
+                isRefreshing = true  // 🔥 Le spinner tourne
+                if (!url.startsWith("about:")) activeTab.url = url
+            }
             override fun onPageStop(s: GeckoSession, success: Boolean) {
+                isRefreshing = false // ⏹️ Le spinner s'arrête
                 if (success &&
                     !activeTab.url.startsWith("about:") &&
                     SearchEngine.entries.none { it.homeUrl == activeTab.url }
@@ -217,14 +219,7 @@ fun BrowserScreen() {
                 }
             }
         }
-        activeTab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
-            override fun onPageStart(s: GeckoSession, url: String) {
-                if (!url.startsWith("about:")) activeTab.url = url
-            }
-            override fun onPageStop(s: GeckoSession, success: Boolean) {
-                delegate.onPageStop(s, success)
-            }
-        }
+        activeTab.session.progressDelegate = delegate
         onDispose {}
     }
 
@@ -303,7 +298,6 @@ fun BrowserScreen() {
                             onNewTab = onNewTab,
                             onHome = goHome,
                             onAddFavorite = {
-                                // 🆕 Passe par le ViewModel
                                 viewModel.addFavorite(activeTab.title, activeTab.url)
                                 Toast.makeText(context, "⭐ Ajouté aux favoris !", Toast.LENGTH_SHORT).show()
                             },
@@ -324,15 +318,45 @@ fun BrowserScreen() {
                         activeTab.url == searchEngine.homeUrl ||
                         SearchEngine.entries.any { engine -> activeTab.url == engine.homeUrl }
 
-                    if (shouldShowHomePage && !activeTab.isFullScreen) {
-                        HomePage(
-                            searchEngine = searchEngine,
-                            viewModel = viewModel,
-                            onSearch = { query -> openUrlInActiveTab(normalizeInput(query, searchEngine)) },
-                            onOpenUrl = { url -> openUrlInActiveTab(url) }
+                    // 🔄 Pull-to-refresh : API native Material 3 1.2.x
+                    val pullToRefreshState = rememberPullToRefreshState()
+                    
+                    // Lance le refresh quand l'utilisateur tire
+                    if (pullToRefreshState.isRefreshing) {
+                        LaunchedEffect(true) {
+                            activeTab.session.reload()
+                            // Petit délai pour que l'utilisateur voie le spinner
+                            kotlinx.coroutines.delay(300)
+                            pullToRefreshState.endRefresh()
+                        }
+                    }
+                    
+                    // Synchronise l'état isRefreshing avec le pull
+                    LaunchedEffect(isRefreshing) {
+                        if (!isRefreshing) pullToRefreshState.endRefresh()
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                    ) {
+                        if (shouldShowHomePage && !activeTab.isFullScreen) {
+                            HomePage(
+                                searchEngine = searchEngine,
+                                viewModel = viewModel,
+                                onSearch = { query -> openUrlInActiveTab(normalizeInput(query, searchEngine)) },
+                                onOpenUrl = { url -> openUrlInActiveTab(url) }
+                            )
+                        } else {
+                            GeckoViewComposable(modifier = Modifier.fillMaxSize(), activeSession = activeTab.session)
+                        }
+                        
+                        // Le spinner de refresh
+                        PullToRefreshContainer(
+                            state = pullToRefreshState,
+                            modifier = Modifier.align(Alignment.TopCenter)
                         )
-                    } else {
-                        GeckoViewComposable(modifier = Modifier.fillMaxSize(), activeSession = activeTab.session)
                     }
                 }
             }
